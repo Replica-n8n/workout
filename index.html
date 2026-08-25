@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workout</title>
+<meta name="description" content="Applications d'entraînement, une par dossier.">
+<meta name="theme-color" content="#141518">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&display=swap">
+<style>
+  :root{
+    --bg:#141518;--surface:#1E2024;--line:#383C42;
+    --text:#E9E7E2;--dim:#9AA0A6;--accent:#E2582F;
+    --ff-display:"Saira Condensed","Arial Narrow",Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    line-height:1.55;padding:0 20px;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:64px 0 80px;}
+  h1{font-family:var(--ff-display);font-size:3.4rem;font-weight:800;text-transform:uppercase;margin:0;line-height:1;}
+  h1 em{font-style:normal;color:var(--accent);}
+  .lede{color:var(--dim);margin:14px 0 40px;max-width:46ch;}
+  a.app{
+    display:flex;gap:16px;align-items:center;text-decoration:none;color:inherit;
+    border:1px solid var(--line);background:var(--surface);padding:18px 20px;
+    margin-bottom:12px;transition:border-color .15s ease;
+  }
+  a.app:hover,a.app:focus-visible{border-color:var(--accent);outline:none;}
+  a.app img{width:52px;height:52px;flex:0 0 auto;}
+  a.app .t{flex:1 1 auto;}
+  a.app strong{display:block;font-family:var(--ff-display);font-size:1.5rem;font-weight:800;text-transform:uppercase;line-height:1;}
+  a.app span{display:block;font-size:.87rem;color:var(--dim);margin-top:5px;}
+  a.app .go{font-family:var(--ff-display);color:var(--accent);font-size:1.5rem;font-weight:800;}
+  footer{color:var(--dim);font-size:.82rem;margin-top:44px;border-top:1px solid var(--line);padding-top:18px;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Work<em>out</em></h1>
+    <p class="lede">
+      Applications d’entraînement, une par dossier. Chacune fonctionne hors ligne
+      et s’installe sur l’écran d’accueil.
+    </p>
+
+    <a class="app" href="la-cour/">
+      <img src="la-cour/icons/icon-192.png" alt="">
+      <span class="t">
+        <strong>La Cour</strong>
+        <span>Calisthénie au poids de corps, dérivée de l’entraînement des prisons
+        mexicaines et corrigée. Six mouvements, six niveaux, Le Croisé le vendredi.</span>
+      </span>
+      <span class="go" aria-hidden="true">→</span>
+    </a>
+
+    <footer>
+      Programmes d’entraînement à titre informatif. Ils ne remplacent pas l’avis
+      d’un médecin ou d’un kinésithérapeute.
+    </footer>
+  </div>
+</body>
+</html>

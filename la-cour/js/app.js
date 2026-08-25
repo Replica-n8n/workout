@@ -1,0 +1,699 @@
+/* =========================================================================
+   La Cour · application
+   Une seule série visible à la fois. Le repos verrouille la suivante.
+   ========================================================================= */
+
+import { SESSIONS, CROISE, RULES, MOVEMENT_ORDER, movement } from './data.js';
+import * as store from './store.js';
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+const fmt = s => {
+  s = Math.max(0, Math.round(s));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return m + ':' + (r < 10 ? '0' + r : r);
+};
+
+/* ---------------------------------------------------------------- écrans */
+
+const SCREENS = ['home', 'run', 'progress', 'settings'];
+
+function goto(name) {
+  SCREENS.forEach(s => {
+    const el = $('#screen-' + s);
+    if (el) el.hidden = (s !== name);
+  });
+  document.body.dataset.screen = name;
+  window.scrollTo(0, 0);
+  if (name === 'home') renderHome();
+  if (name === 'progress') renderProgress();
+  if (name === 'settings') renderSettings();
+}
+
+/* ------------------------------------------------------------- construction
+   La liste des séries de la séance, à plat. Une entrée = un écran. */
+
+function buildSteps(type) {
+  const st = store.get();
+  const session = SESSIONS[type];
+  const steps = [];
+
+  session.blocks.forEach((b, bi) => {
+    const mv = movement(b.mov, st.variant);
+    const lvl = store.levelOf(b.mov);
+    for (let i = 0; i < b.sets; i++) {
+      steps.push({
+        mov: b.mov,
+        title: mv.levels[lvl - 1],
+        movName: mv.short || mv.name,
+        level: lvl,
+        unit: mv.unit,
+        setNo: i + 1,
+        setsTotal: b.sets,
+        rest: b.rest,
+        block: bi,
+        blocks: session.blocks.length + (0),
+        unilateral: !!b.unilateral,
+        croise: false
+      });
+    }
+  });
+
+  if (type === 'B' && store.croiseDue()) {
+    const n = store.croiseSets();
+    const seq = CROISE.sequence(n);
+    const key = 'push_h';
+    const mv = movement(key, st.variant);
+    const lvl = store.levelOf(key);
+    seq.forEach((reps, i) => {
+      steps.push({
+        mov: key,
+        title: mv.levels[lvl - 1],
+        movName: 'Le Croisé',
+        level: lvl,
+        unit: 'reps',
+        setNo: i + 1,
+        setsTotal: n,
+        rest: CROISE.rest,
+        block: session.blocks.length,
+        blocks: session.blocks.length + 1,
+        unilateral: false,
+        croise: true,
+        target: reps
+      });
+    });
+  }
+
+  steps.forEach(s => { s.blocks = steps[steps.length - 1].block + 1; });
+  return steps;
+}
+
+/* --------------------------------------------------------------- la séance */
+
+let run = null;          // { type, steps, i, phase, restEndsAt, value, logged, croiseClean, startedAt }
+let ticker = null;
+let wakeLock = null;
+let audioCtx = null;
+let pendingLevel = null; // proposition de changement de niveau en attente
+
+function startSession(type, resumed) {
+  const steps = resumed ? resumed.steps : buildSteps(type);
+  run = resumed || {
+    type,
+    steps,
+    i: 0,
+    phase: 'ready',
+    restEndsAt: 0,
+    value: null,
+    logged: [],
+    croiseClean: true,
+    startedAt: Date.now()
+  };
+  if (run.value === null || run.value === undefined) run.value = defaultValue();
+  pendingLevel = null;
+  keepAwake();
+  goto('run');
+  renderRun();
+  startTicker();
+}
+
+function step() { return run.steps[run.i]; }
+
+function defaultValue() {
+  const s = step();
+  if (!s) return 0;
+  if (s.croise) return s.target;
+  return store.prefill(s.mov, s.unit);
+}
+
+function persistRun() {
+  if (run) store.saveRun(run);
+}
+
+/* ------------------------------------------------------------ le chrono */
+
+function startTicker() {
+  stopTicker();
+  ticker = setInterval(() => {
+    if (!run) return;
+    if (run.phase === 'rest') {
+      const left = (run.restEndsAt - Date.now()) / 1000;
+      if (left <= 0) { unlock(true); return; }
+      paintRest(left);
+    }
+    paintClock();
+  }, 250);
+}
+function stopTicker() { if (ticker) { clearInterval(ticker); ticker = null; } }
+
+function paintClock() {
+  const el = $('#run-clock');
+  if (el && run) el.textContent = fmt((Date.now() - run.startedAt) / 1000);
+}
+
+function paintRest(left) {
+  const s = step();
+  const t = $('#focus-time');
+  const bar = $('#focus-bar-fill');
+  if (t) t.textContent = fmt(left);
+  if (bar && s) bar.style.width = Math.round(100 * (1 - left / s.rest)) + '%';
+}
+
+/* ------------------------------------------------------------- les actions */
+
+function validate() {
+  const s = step();
+  if (!s) return;
+
+  // La proposition précédente a eu le temps du repos pour être vue.
+  // Sans réponse, elle disparaît : elle reviendra à la prochaine séance.
+  pendingLevel = null;
+
+  run.logged.push({ mov: s.mov, level: s.level, value: run.value, croise: s.croise });
+
+  if (!s.croise) {
+    const proposal = store.logSet(s.mov, run.value, s.unit);
+    // On ne propose qu'à la dernière série du mouvement, pour ne pas
+    // interrompre au milieu.
+    if (proposal && s.setNo === s.setsTotal) {
+      pendingLevel = { mov: s.mov, block: s.block, ...proposal };
+    }
+  } else if (run.value < s.target) {
+    run.croiseClean = false;   // série avortée : la taille ne montera pas
+  }
+
+  run.i++;
+  if (run.i >= run.steps.length) { finish(); return; }
+
+  run.value = defaultValue();
+  run.phase = 'rest';
+  run.restEndsAt = Date.now() + s.rest * 1000;
+  persistRun();
+  renderRun();
+}
+
+function unlock(auto) {
+  if (!run) return;
+  run.phase = 'ready';
+  run.restEndsAt = 0;
+  persistRun();
+  renderRun();
+  if (auto) signal();
+}
+
+function adjust(delta) {
+  const s = step();
+  if (!s) return;
+  const base = s.croise ? s.target : store.prefill(s.mov, s.unit);
+  const b = store.bounds(base, s.unit);
+  const next = run.value + delta * b.step;
+  if (next < b.min || next > b.max) return;
+  run.value = next;
+  persistRun();
+  renderRun();
+}
+
+function abortCroise() {
+  run.croiseClean = false;
+  // on saute toutes les séries restantes du Croisé
+  while (run.i < run.steps.length && run.steps[run.i].croise) run.i++;
+  if (run.i >= run.steps.length) { finish(); return; }
+  run.phase = 'ready';
+  run.value = defaultValue();
+  persistRun();
+  renderRun();
+}
+
+function finish() {
+  stopTicker();
+  releaseWake();
+  const hadCroise = run.steps.some(s => s.croise);
+  if (hadCroise) store.finishCroise(run.croiseClean);
+  store.finishSession(run.type, run.logged, hadCroise ? { sets: store.croiseSets(), clean: run.croiseClean } : null);
+  store.clearRun();
+  const summary = {
+    type: run.type,
+    minutes: Math.round((Date.now() - run.startedAt) / 60000),
+    sets: run.logged.length,
+    croise: hadCroise ? run.croiseClean : null,
+    level: pendingLevel
+  };
+  run = null;
+  pendingLevel = null;
+  renderDone(summary);
+  goto('home');
+}
+
+function quitSession() {
+  stopTicker();
+  releaseWake();
+  persistRun();
+  run = null;
+  goto('home');
+}
+
+/* ---------------------------------------------------------------- rendu */
+
+function renderRun() {
+  const s = step();
+  if (!s) return;
+
+  $('#run-block').textContent = s.croise
+    ? 'Le Croisé · en plus'
+    : 'Mouvement ' + (s.block + 1) + ' sur ' + s.blocks;
+
+  $('#run-title').textContent = s.title;
+
+  const chips = $('#run-chips');
+  chips.innerHTML = '';
+  chips.appendChild(chip(s.movName + ' · niveau ' + s.level));
+  chips.appendChild(chip(
+    s.croise
+      ? s.setsTotal + ' séries · ' + CROISE.total(s.setsTotal) + ' reps'
+      : s.setsTotal + ' séries' + (s.unilateral ? ' par côté' : ''),
+    true
+  ));
+
+  const bars = $('#run-bars');
+  bars.innerHTML = '';
+  for (let b = 0; b < s.blocks; b++) {
+    const i = document.createElement('i');
+    if (b < s.block) i.className = 'f';
+    else if (b === s.block) i.className = 'c';
+    bars.appendChild(i);
+  }
+
+  renderFocus(s);
+  renderDoneList(s);
+  paintClock();
+}
+
+function chip(text, accent) {
+  const el = document.createElement('span');
+  el.className = 'chip' + (accent ? ' chip-accent' : '');
+  el.textContent = text;
+  return el;
+}
+
+function renderFocus(s) {
+  const box = $('#run-focus');
+  const act = $('#run-action');
+  const alt = $('#run-alt');
+  const unitLabel = s.unit === 'sec' ? 'secondes' : 'répétitions';
+
+  if (run.phase === 'ready') {
+    const base = s.croise ? s.target : store.prefill(s.mov, s.unit);
+    const b = store.bounds(base, s.unit);
+    box.innerHTML =
+      '<div class="card">' +
+        '<span class="card-label">Série ' + s.setNo + ' sur ' + s.setsTotal + '</span>' +
+        '<div class="stepper">' +
+          '<button class="step-btn" type="button" data-adj="-1" aria-label="Moins">−</button>' +
+          '<span class="stepper-value"><b>' + run.value + '</b><small>' + unitLabel + '</small></span>' +
+          '<button class="step-btn" type="button" data-adj="1" aria-label="Plus">+</button>' +
+        '</div>' +
+        '<p class="card-hint">' +
+          (s.croise
+            ? 'La séquence demande ' + s.target + '. '
+            : 'Objectif ' + store.thresholds(s.unit).up + ' ' + unitLabel +
+              ' pour monter de niveau. ') +
+          'Touche moins ou plus seulement si tu n’as pas fait ce compte. Réglable de ' +
+          b.min + ' à ' + b.max + '.' +
+        '</p>' +
+      '</div>';
+    $$('#run-focus .step-btn').forEach(btn => {
+      const d = parseInt(btn.dataset.adj, 10);
+      const nextV = run.value + d * b.step;
+      btn.disabled = nextV < b.min || nextV > b.max;
+      btn.addEventListener('click', () => adjust(d));
+    });
+    act.textContent = 'Série ' + s.setNo + ' faite';
+    act.className = 'btn-primary';
+  } else {
+    const left = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
+    box.innerHTML =
+      '<div class="card locked">' +
+        '<span class="card-label">Série ' + s.setNo + ' verrouillée · repos</span>' +
+        '<div class="card-time" id="focus-time">' + fmt(left) + '</div>' +
+        '<div class="card-bar"><i id="focus-bar-fill" style="width:' +
+          Math.round(100 * (1 - left / s.rest)) + '%"></i></div>' +
+        '<p class="card-hint">Elle s’ouvre à zéro. ' + s.setNo + '<sup>e</sup> série : ' +
+          run.value + ' ' + unitLabel + '.</p>' +
+        (pendingLevel ? levelBanner() : '') +
+      '</div>';
+    if (pendingLevel) wireLevelBanner();
+    act.textContent = 'Ouvrir maintenant';
+    act.className = 'btn-primary btn-wait';
+  }
+
+  alt.hidden = !s.croise;
+  if (s.croise) alt.textContent = 'Arrêter Le Croisé, amplitude perdue';
+}
+
+function levelBanner() {
+  const p = pendingLevel;
+  const up = p.kind === 'up';
+  const unit = p.unit === 'sec' ? 'secondes' : 'répétitions';
+  return '<div class="banner" id="level-banner">' +
+    '<p>' + (up
+      ? RULES.levelUpSets + ' séries à ' + p.target + ' ' + unit +
+        '. Passer au niveau ' + p.to + ' ?'
+      : 'Deux séries sous ' + p.target + ' ' + unit +
+        '. Redescendre au niveau ' + p.to + ' ?') +
+    '</p>' +
+    '<div class="banner-actions">' +
+      '<button type="button" class="btn-small" data-lvl="yes">' + (up ? 'Monter' : 'Redescendre') + '</button>' +
+      '<button type="button" class="btn-small ghost" data-lvl="no">Rester</button>' +
+    '</div>' +
+    '<small>Effectif à la prochaine séance.</small>' +
+  '</div>';
+}
+
+function wireLevelBanner() {
+  const b = $('#level-banner');
+  if (!b) return;
+  b.addEventListener('click', e => {
+    const v = e.target.dataset.lvl;
+    if (!v) return;
+    if (v === 'yes') store.changeLevel(pendingLevel.mov, pendingLevel.to);
+    pendingLevel = null;
+    renderRun();
+  });
+}
+
+function renderDoneList(s) {
+  const box = $('#run-done');
+  // uniquement les séries du mouvement en cours
+  const here = [];
+  for (let k = run.i - 1; k >= 0; k--) {
+    const st = run.steps[k];
+    if (st.block !== s.block) break;
+    here.push({ n: st.setNo, v: run.logged[k] ? run.logged[k].value : '–' });
+  }
+  if (!here.length) { box.innerHTML = ''; return; }
+  box.innerHTML =
+    '<div class="done-head">Séries faites · ' + here.length + ' sur ' + s.setsTotal + '</div>' +
+    here.map(d =>
+      '<div class="done-row"><span class="tick">✓</span>' +
+      '<span class="done-name">Série ' + d.n + '</span>' +
+      '<span class="done-val">' + d.v + '</span></div>'
+    ).join('');
+}
+
+/* ------------------------------------------------------------------ accueil */
+
+function renderHome() {
+  const st = store.get();
+  const type = store.nextSession();
+  const session = SESSIONS[type];
+  const saved = store.loadRun();
+
+  $('#home-date').textContent = new Date().toLocaleDateString('fr-FR',
+    { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#home-session').textContent = session.label;
+
+  const withCroise = type === 'B' && store.croiseDue();
+  // durée honnête : travail + repos, moins le dernier repos de chaque bloc
+  const mins = session.blocks.reduce(
+    (a, b) => a + (b.sets * (b.rest + 30) - b.rest) / 60, 0) + 5;
+  $('#home-sub').textContent = session.name + ' · ' +
+    Math.round(mins + (withCroise ? 12 : 0)) + ' min';
+
+  const list = $('#home-list');
+  list.innerHTML = '';
+  session.blocks.forEach((b, i) => {
+    const mv = movement(b.mov, st.variant);
+    const lvl = store.levelOf(b.mov);
+    const target = store.prefill(b.mov, mv.unit);
+    list.appendChild(row(
+      String(i + 1),
+      mv.levels[lvl - 1],
+      (mv.short || mv.name) + ' · niveau ' + lvl,
+      b.sets + ' × ' + target + (mv.unit === 'sec' ? ' s' : '')
+    ));
+  });
+  if (withCroise) {
+    const n = store.croiseSets();
+    const el = row('+', 'Le Croisé, sur les pompes',
+      n + ' séries · une fois par semaine', CROISE.total(n) + ' reps');
+    el.classList.add('extra');
+    list.appendChild(el);
+  }
+
+  const streak = $('#home-streak');
+  streak.innerHTML = '';
+  const done = store.recentDone(12).length;
+  for (let i = 0; i < 12; i++) {
+    const j = document.createElement('i');
+    if (i < done) j.className = 'f';
+    streak.appendChild(j);
+  }
+  $('#home-streak-label').textContent = done
+    ? done + ' séance' + (done > 1 ? 's' : '') + ' enregistrée' + (done > 1 ? 's' : '')
+    : 'Aucune séance enregistrée pour l’instant';
+
+  const resume = $('#home-resume');
+  resume.hidden = !saved;
+  if (saved) {
+    resume.textContent = 'Reprendre la séance ' + saved.type +
+      ' · série ' + (saved.i + 1) + ' sur ' + saved.steps.length;
+  }
+  $('#home-start').textContent = saved ? 'Recommencer à zéro' : 'Commencer';
+}
+
+function row(index, name, sub, value) {
+  const el = document.createElement('div');
+  el.className = 'plan-row';
+  el.innerHTML =
+    '<span class="plan-i">' + index + '</span>' +
+    '<span class="plan-n">' + name + '<s>' + sub + '</s></span>' +
+    '<span class="plan-v">' + value + '</span>';
+  return el;
+}
+
+function renderDone(sum) {
+  const box = $('#home-flash');
+  box.hidden = false;
+  box.innerHTML =
+    '<strong>' + SESSIONS[sum.type].label + ' terminée</strong>' +
+    '<span>' + sum.sets + ' séries en ' +
+    (sum.minutes < 1 ? 'moins d’une minute' : sum.minutes + ' minutes') +
+    (sum.croise === true ? ' · Croisé bouclé, plus 2 séries la prochaine fois'
+      : sum.croise === false ? ' · Croisé interrompu, même taille la prochaine fois' : '') +
+    '</span>';
+
+  /* Le dernier mouvement d'une séance n'a pas de repos derrière lui :
+     sa proposition de niveau n'a nulle part où s'afficher pendant la
+     séance. Elle atterrit donc ici. */
+  if (sum.level) {
+    const p = sum.level;
+    const mv = movement(p.mov, store.get().variant);
+    const unit = p.unit === 'sec' ? 'secondes' : 'répétitions';
+    const banner = document.createElement('div');
+    banner.className = 'banner';
+    banner.innerHTML =
+      '<p>' + (mv.short || mv.name) + ' : ' +
+      (p.kind === 'up'
+        ? RULES.levelUpSets + ' séries à ' + p.target + ' ' + unit +
+          '. Passer au niveau ' + p.to + ' ?'
+        : 'deux séries sous ' + p.target + ' ' + unit +
+          '. Redescendre au niveau ' + p.to + ' ?') + '</p>' +
+      '<div class="banner-actions">' +
+        '<button type="button" class="btn-small" data-lvl="yes">' +
+          (p.kind === 'up' ? 'Monter' : 'Redescendre') + '</button>' +
+        '<button type="button" class="btn-small ghost" data-lvl="no">Rester</button>' +
+      '</div>';
+    banner.addEventListener('click', e => {
+      const v = e.target.dataset.lvl;
+      if (!v) return;
+      if (v === 'yes') store.changeLevel(p.mov, p.to);
+      banner.remove();
+      renderHome();
+    });
+    box.appendChild(banner);
+  }
+}
+
+/* -------------------------------------------------------------- progression */
+
+function renderProgress() {
+  const st = store.get();
+  const box = $('#progress-list');
+  box.innerHTML = '';
+
+  MOVEMENT_ORDER.forEach(key => {
+    const mv = movement(key, st.variant);
+    const ms = store.movementState(key);
+    const lvl = store.levelOf(key);
+    const up = store.thresholds(mv.unit).up;
+    const tail = ms.recent.slice(-RULES.levelUpSets);
+    const near = tail.length === RULES.levelUpSets && tail.every(v => v >= up);
+    const el = document.createElement('div');
+    el.className = 'prog-item';
+    el.innerHTML =
+      '<div class="prog-top"><span class="prog-name">' + (mv.short || mv.name) +
+      '</span><span class="prog-lvl">Niveau ' + lvl + '</span></div>' +
+      '<div class="pips">' + Array.from({ length: 6 }, (_, i) =>
+        '<i class="' + (i < lvl ? 'f' : '') + '"></i>').join('') + '</div>' +
+      '<p class="prog-goal">' + mv.levels[lvl - 1] +
+        (ms.best ? ' · meilleure série : ' + ms.best + (mv.unit === 'sec' ? ' s' : '') : '') +
+        (near ? ' · <b>prêt pour le niveau ' + (lvl + 1) + '</b>' : '') +
+      '</p>';
+    box.appendChild(el);
+  });
+
+  const n = store.croiseSets();
+  const el = document.createElement('div');
+  el.className = 'prog-item';
+  el.innerHTML =
+    '<div class="prog-top"><span class="prog-name">Le Croisé</span>' +
+    '<span class="prog-lvl">' + n + ' séries sur ' + CROISE.maxSets + '</span></div>' +
+    '<div class="pips">' + Array.from({ length: 7 }, (_, i) =>
+      '<i class="' + (CROISE.minSets + i * CROISE.step <= n ? 'f' : '') + '"></i>').join('') + '</div>' +
+    '<p class="prog-goal">' + CROISE.total(n) + ' répétitions · destination ' +
+    CROISE.maxSets + ' séries, ' + CROISE.total(CROISE.maxSets) + ' répétitions</p>';
+  box.appendChild(el);
+
+  const hist = $('#progress-history');
+  const h = store.get().history;
+  // "2026-08-25" passé à new Date() est interprété en UTC, ce qui décale
+  // l'affichage d'un jour selon le fuseau. On construit la date en local.
+  const localDate = iso => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  hist.innerHTML = h.length
+    ? h.slice(0, 10).map(s =>
+        '<div class="hist-row"><span>' +
+        localDate(s.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) +
+        '</span><span>' + SESSIONS[s.type].label + '</span><span>' +
+        s.logged.length + ' séries</span></div>').join('')
+    : '<p class="muted">Rien encore. La première séance apparaîtra ici.</p>';
+}
+
+/* ----------------------------------------------------------------- réglages */
+
+function renderSettings() {
+  const st = store.get();
+  $$('#settings-variant .opt').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.variant === st.variant));
+  });
+  $('#settings-version').textContent = window.LACOUR_VERSION || '1.0.0';
+}
+
+/* ------------------------------------------------------------------ système */
+
+async function keepAwake() {
+  try {
+    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+  } catch (e) { /* refusé ou non supporté, sans conséquence */ }
+}
+function releaseWake() {
+  try { if (wakeLock) { wakeLock.release(); wakeLock = null; } } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (run) { keepAwake(); renderRun(); }
+  }
+});
+
+/* Bip court plus vibration, à la fin du repos. Le téléphone est dans la poche. */
+function signal() {
+  try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'square';
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.15, audioCtx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.28);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.3);
+  } catch (e) {}
+}
+
+/* --------------------------------------------------------------- démarrage */
+
+function wire() {
+  $('#home-start').addEventListener('click', () => {
+    store.clearRun();
+    $('#home-flash').hidden = true;
+    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    startSession(store.nextSession());
+  });
+
+  $('#home-resume').addEventListener('click', () => {
+    const saved = store.loadRun();
+    if (saved) startSession(saved.type, saved);
+  });
+
+  $('#run-action').addEventListener('click', () => {
+    if (!run) return;
+    if (run.phase === 'ready') validate(); else unlock(false);
+  });
+
+  $('#run-alt').addEventListener('click', () => { if (run) abortCroise(); });
+  $('#run-quit').addEventListener('click', quitSession);
+
+  $$('[data-goto]').forEach(b => {
+    b.addEventListener('click', () => goto(b.dataset.goto));
+  });
+
+  $$('#settings-variant .opt').forEach(b => {
+    b.addEventListener('click', () => {
+      store.setVariant(b.dataset.variant);
+      renderSettings();
+    });
+  });
+
+  $('#settings-wipe').addEventListener('click', () => {
+    if (confirm('Effacer toute la progression et l’historique ? C’est définitif.')) {
+      store.wipe();
+      goto('home');
+    }
+  });
+}
+
+wire();
+goto('home');
+
+/* Service worker : le seul endroit où vit le numéro de version. */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      reg.addEventListener('updatefound', () => {
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener('statechange', () => {
+          if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+            const bar = $('#update-bar');
+            bar.hidden = false;
+            $('#update-btn').addEventListener('click', () => {
+              sw.postMessage('skip-waiting');
+              location.reload();
+            });
+          }
+        });
+      });
+    }).catch(() => {});
+  });
+}
+
+/* Proposition d'installation, seulement si le navigateur l'offre. */
+let installEvent = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  installEvent = e;
+  const b = $('#install-btn');
+  b.hidden = false;
+  b.addEventListener('click', async () => {
+    b.hidden = true;
+    installEvent.prompt();
+    installEvent = null;
+  });
+});

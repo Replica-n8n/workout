@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La Cour</title>
+<meta name="description" content="Programme de calisthénie au poids de corps, dérivé de l'entraînement des prisons mexicaines et corrigé. Une seule série à la fois, hors ligne.">
+<meta name="theme-color" content="#141518">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="La Cour">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@600;700;800&display=swap">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="app">
+
+  <div class="topbar" id="update-bar" hidden>
+    <span>Une nouvelle version est prête.</span>
+    <button type="button" id="update-btn">Recharger</button>
+  </div>
+
+  <!-- ============================ ACCUEIL ============================ -->
+  <section class="screen" id="screen-home">
+    <div class="bar">
+      <span class="brand">La <em>Cour</em></span>
+      <span style="display:flex;gap:7px;">
+        <button class="iconbtn" type="button" data-goto="progress">Progression</button>
+        <button class="iconbtn" type="button" data-goto="settings">Réglages</button>
+      </span>
+    </div>
+
+    <div class="body">
+      <div class="home-head">
+        <span class="home-date" id="home-date"></span>
+        <h1 class="home-session" id="home-session">Séance A</h1>
+        <span class="home-sub" id="home-sub"></span>
+      </div>
+
+      <div class="flash" id="home-flash" hidden></div>
+
+      <div class="plan" id="home-list"></div>
+
+      <div class="streak" id="home-streak"></div>
+      <p class="streak-label" id="home-streak-label"></p>
+
+      <button class="install" type="button" id="install-btn" hidden>
+        Installer sur l’écran d’accueil
+      </button>
+    </div>
+
+    <div class="foot">
+      <button class="btn-ghost" type="button" id="home-resume" hidden></button>
+      <button class="btn-primary" type="button" id="home-start">Commencer</button>
+    </div>
+  </section>
+
+  <!-- ============================= SÉANCE ============================= -->
+  <section class="screen" id="screen-run" hidden>
+    <div class="bar">
+      <span class="brand">La <em>Cour</em></span>
+      <button class="iconbtn" type="button" id="run-quit">Mettre en pause</button>
+    </div>
+
+    <div class="body">
+      <div class="bars" id="run-bars"></div>
+      <div class="run-top">
+        <span class="label" id="run-block"></span>
+        <span class="label num" id="run-clock" style="color:var(--dim)">0:00</span>
+      </div>
+      <h2 class="run-title" id="run-title"></h2>
+      <div class="chips" id="run-chips"></div>
+
+      <div id="run-focus"></div>
+      <div class="done" id="run-done"></div>
+    </div>
+
+    <div class="foot">
+      <button class="btn-primary" type="button" id="run-action">Série faite</button>
+      <button class="btn-ghost" type="button" id="run-alt" hidden></button>
+    </div>
+  </section>
+
+  <!-- =========================== PROGRESSION =========================== -->
+  <section class="screen" id="screen-progress" hidden>
+    <div class="bar">
+      <span class="brand">Progression</span>
+      <button class="iconbtn" type="button" data-goto="home">Retour</button>
+    </div>
+
+    <div class="body">
+      <p class="muted" style="margin:8px 0 4px;">
+        Trois séries de 12 répétitions propres font monter d’un niveau.
+      </p>
+      <div id="progress-list"></div>
+
+      <h3 style="margin:22px 0 6px;font-size:1.05rem;">Dernières séances</h3>
+      <div id="progress-history"></div>
+    </div>
+
+    <div class="foot">
+      <button class="btn-primary" type="button" data-goto="home">Retour</button>
+    </div>
+  </section>
+
+  <!-- ============================ RÉGLAGES ============================ -->
+  <section class="screen" id="screen-settings" hidden>
+    <div class="bar">
+      <span class="brand">Réglages</span>
+      <button class="iconbtn" type="button" data-goto="home">Retour</button>
+    </div>
+
+    <div class="body">
+      <div class="set-block">
+        <h3>Le tirage</h3>
+        <p>
+          Aucun exercice au sol ne charge le dos et les biceps : tirer suppose
+          quelque chose à tirer. En prison, c’est le dessous du lit superposé.
+          Dehors, c’est le dessous d’une table.
+        </p>
+        <div class="opts" id="settings-variant">
+          <button class="opt" type="button" data-variant="table" aria-pressed="true">
+            <strong>Avec une table</strong>
+            <span>Recommandé. Rowing sous une table solide, une table de pique-nique
+            ou un bureau. Rien à acheter. Le dos et les biceps travaillent vraiment.</span>
+          </button>
+          <button class="opt" type="button" data-variant="strict" aria-pressed="false">
+            <strong>Rien du tout</strong>
+            <span>Le sol seulement. Le tirage est remplacé par du travail de chaîne
+            postérieure haute : la posture est tenue, mais ni dos ni biceps ne se
+            construisent. Le programme devient dominant en poussée.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="set-block">
+        <h3>Les données</h3>
+        <p>
+          Tout est enregistré sur ce téléphone uniquement. Aucun compte, aucun
+          serveur, rien qui sorte d’ici. Vider le stockage du navigateur efface
+          la progression.
+        </p>
+        <button class="btn-ghost danger" type="button" id="settings-wipe">
+          Tout effacer
+        </button>
+      </div>
+
+      <div class="set-block" style="border-bottom:0;">
+        <h3>À propos</h3>
+        <p style="margin-bottom:6px;">
+          Version <span id="settings-version" class="num">1.0.0</span>. Programme
+          d’entraînement à titre informatif. Il ne remplace pas l’avis d’un médecin
+          ou d’un kinésithérapeute, en particulier en cas de douleur articulaire ou
+          de reprise après une longue interruption.
+        </p>
+      </div>
+    </div>
+
+    <div class="foot">
+      <button class="btn-primary" type="button" data-goto="home">Retour</button>
+    </div>
+  </section>
+
+</div>
+
+<script>window.LACOUR_VERSION = '1.0.0';</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
