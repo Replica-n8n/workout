@@ -6,6 +6,7 @@
 import { SEANCE, CROISE, RULES, MOVEMENT_ORDER, movement, levelInfo } from './data.js';
 import * as store from './store.js';
 import * as media from './media.js';
+import * as figures from './figures.js';
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -23,6 +24,38 @@ const fmt = s => {
 function announce(msg) {
   const el = $('#announce');
   if (el) el.textContent = msg;
+}
+
+/* La figure d'un mouvement dépend de la variante : en version sans rien, le
+   tirage devient de la chaîne postérieure et n'a rien à voir. */
+function cleFigure(mov, niveau) {
+  const strict = store.get().variant === 'strict' && mov === 'pull';
+  return (strict ? 'pull_s' : mov) + '-' + niveau;
+}
+
+/* Fenêtre d'explication. Un <dialog> natif plutôt qu'une surcouche maison :
+   Échap ferme, le focus est piégé, et le lecteur d'écran l'annonce seul. */
+function ouvrirFiche(mov, niveau, titre, sousTitre) {
+  const cle = cleFigure(mov, niveau);
+  const d = $('#fiche');
+  $('#fiche-titre').textContent = titre;
+  $('#fiche-sous').textContent = sousTitre;
+  $('#fiche-dessin').innerHTML = figures.figure(cle) || '';
+  $('#fiche-note').textContent = figures.note(cle);
+  d.showModal();
+}
+
+function boutonInfo(mov, niveau, titre, sousTitre) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'info';
+  b.textContent = 'i';
+  b.setAttribute('aria-label', 'Comment faire : ' + titre);
+  b.addEventListener('click', e => {
+    e.stopPropagation();
+    ouvrirFiche(mov, niveau, titre, sousTitre);
+  });
+  return b;
 }
 
 /* ---------------------------------------------------------------- écrans */
@@ -358,6 +391,9 @@ function renderRun() {
     : 'Mouvement ' + (s.block + 1) + ' sur ' + s.blocks;
 
   $('#run-title').textContent = s.title;
+  const info = $('#run-info');
+  info.replaceChildren(boutonInfo(s.mov, s.level, s.title,
+                                  s.movName + ' · niveau ' + s.level));
 
   const chips = $('#run-chips');
   chips.innerHTML = '';
@@ -527,18 +563,22 @@ function renderHome() {
     const lvl = store.levelOf(b.mov);
     const li = levelInfo(b.mov, st.variant, lvl);
     const target = store.prefill(b.mov, li.unit);
-    list.appendChild(row(
-      String(i + 1),
-      li.name,
-      (mv.short || mv.name) + ' · niveau ' + lvl,
-      b.sets + ' × ' + target + (li.unit === 'sec' ? ' s' : '')
-    ));
+    const sous = (mv.short || mv.name) + ' · niveau ' + lvl;
+    const el = row(String(i + 1), li.name, sous,
+                   b.sets + ' × ' + target + (li.unit === 'sec' ? ' s' : ''));
+    el.insertBefore(boutonInfo(b.mov, lvl, li.name, sous), el.querySelector('.plan-v'));
+    list.appendChild(el);
   });
   if (withCroise) {
     const n = store.croiseSets();
+    const lvlC = store.levelOf('push_h');
+    const liC = levelInfo('push_h', st.variant, lvlC);
     const el = row('+', 'Le Croisé, sur les pompes',
       n + ' séries · une fois par semaine', CROISE.total(n) + ' reps');
     el.classList.add('extra');
+    // Le Croisé se fait sur les pompes : sa fiche est celle du niveau en cours.
+    el.insertBefore(boutonInfo('push_h', lvlC, liC.name, 'Le Croisé · niveau ' + lvlC),
+                    el.querySelector('.plan-v'));
     list.appendChild(el);
   }
 

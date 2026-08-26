@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.3.0';
+const VERSION = '1.4.0';
 const SHELL = 'lacour-shell-' + VERSION;
 const ASSETS = 'lacour-assets-' + VERSION;
 
@@ -18,6 +18,7 @@ const FILES = [
   './js/data.js',
   './js/store.js',
   './js/media.js',
+  './js/figures.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

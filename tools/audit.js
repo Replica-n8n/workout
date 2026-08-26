@@ -150,7 +150,11 @@ function reglesEcran(nom, out) {
   const ajoute = (regle, gravite, cible, detail, mesure) =>
     out.push({ ecran: nom, regle, gravite, cible, detail, mesure });
 
-  const ecran = document.querySelector('.screen:not([hidden])') || document.body;
+  /* Un dialogue modal ouvert EST l'écran : il capte le focus et masque le
+     reste. L'auditer via `.screen` renvoyait un zéro trompeur, puisque le
+     <dialog> vit hors de ces sections. */
+  const modal = document.querySelector('dialog[open]');
+  const ecran = modal || document.querySelector('.screen:not([hidden])') || document.body;
   const cibles = Array.from(ecran.querySelectorAll(INTERACTIF)).filter(visible);
 
   /* 1. Taille des cibles tactiles */
@@ -211,7 +215,8 @@ function reglesEcran(nom, out) {
 
   /* 5. L'action principale doit rester sous le pouce et entière à l'écran.
         C'est le bug du min-height:100dvh qui poussait le bouton dehors. */
-  const principal = ecran.querySelector('.foot .btn-primary, .foot button:last-child');
+  const principal = ecran.querySelector('.foot .btn-primary, .foot button:last-child') ||
+                    (modal ? modal.querySelector('button[type=submit], button:last-of-type') : null);
   if (principal) {
     const r = principal.getBoundingClientRect();
     const vh = window.innerHeight;

@@ -186,6 +186,33 @@ sup{font-size:.6em;}
    récente, qui est justement celle qu'on veut relire. */
 
 /* ---------------------------------------------------------- progression */
+/* ------------------------------------------------- le petit i et sa fiche */
+.run-head{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}
+.run-head .run-title{flex:1 1 auto;}
+.info{
+  width:44px;height:44px;flex:0 0 auto;border:1px solid var(--line);
+  background:transparent;color:var(--steel);cursor:pointer;
+  font-family:var(--ff-display);font-size:1.25rem;font-weight:800;line-height:1;
+  border-radius:50%;
+}
+.info:active{background:var(--surface-2);color:var(--text);}
+.info:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+.plan-row .info{margin-left:auto;}
+
+#fiche{
+  border:1px solid var(--line);background:var(--surface);color:var(--text);
+  padding:0;max-width:min(420px,calc(100vw - 32px));width:100%;
+}
+#fiche::backdrop{background:rgba(8,9,11,.78);}
+.fiche-corps{padding:20px 20px 4px;display:flex;flex-direction:column;gap:4px;}
+.fiche-titre{font-family:var(--ff-display);font-size:1.7rem;font-weight:800;text-transform:uppercase;line-height:1.02;}
+.fiche-dessin{
+  margin:14px 0 12px;padding:10px 6px;border:1px solid var(--line);
+  background:var(--bg);color:var(--text);display:flex;justify-content:center;
+}
+.fiche-note{font-size:.95rem;color:var(--dim);line-height:1.5;padding-bottom:14px;}
+#fiche form{padding:0 20px 20px;}
+
 .prog-item{padding:13px 0;border-bottom:1px solid var(--line);}
 .prog-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
 .prog-name{font-family:var(--ff-display);font-size:1.08rem;font-weight:700;text-transform:uppercase;}
