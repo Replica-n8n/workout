@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.2.2';
+const VERSION = '1.2.3';
 const SHELL = 'lacour-shell-' + VERSION;
 const ASSETS = 'lacour-assets-' + VERSION;
 
@@ -25,9 +25,14 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
+  /* `cache: 'reload'` est indispensable : sans lui, addAll() passe par le
+     cache HTTP du navigateur et peut remplir un cache tout neuf avec les
+     ANCIENS fichiers. On obtient alors un cache nommé 1.2.3 contenant du
+     1.2.2, et une mise à jour qui ne met rien à jour. Constaté en local,
+     et possible en production tant que Pages sert ses en-têtes de cache. */
   e.waitUntil(
     caches.open(SHELL)
-      .then(c => c.addAll(FILES))
+      .then(c => c.addAll(FILES.map(f => new Request(f, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

@@ -224,11 +224,11 @@ function validate() {
 
   if (!s.croise) {
     const proposal = store.logSet(s.mov, run.value, s.unit);
-    // On ne propose qu'à la dernière série du mouvement, pour ne pas
-    // interrompre au milieu.
-    if (proposal && s.setNo === s.setsTotal) {
-      pendingLevel = { mov: s.mov, block: s.block, ...proposal };
-    }
+    /* La proposition s'affiche dès que la condition est remplie, sur le repos
+       qui suit. La réserver à la dernière série la rendait imprévisible : on
+       pouvait faire trois séries à 13 sans rien voir. Le repos est justement
+       le moment où l'on n'interrompt rien. */
+    if (proposal) pendingLevel = { mov: s.mov, block: s.block, ...proposal };
   } else if (run.value < s.target) {
     run.croiseClean = false;   // série avortée : la taille ne montera pas
   }
@@ -378,8 +378,12 @@ function renderFocus(s) {
         '<p class="card-hint">' +
           (s.croise
             ? 'La séquence demande ' + s.target + '. '
-            : 'Objectif ' + store.thresholds(s.unit).up + ' ' + unitLabel +
-              ' pour monter de niveau. ') +
+            : (() => {
+                const p = store.progresNiveau(s.mov, s.unit);
+                return 'Niveau suivant à ' + p.requis + ' séries de ' + p.seuil +
+                       ' ' + unitLabel + ' : ' + p.faites + ' sur ' + p.requis +
+                       ' pour l’instant. ';
+              })()) +
           'Touche moins ou plus seulement si tu n’as pas fait ce compte. Réglable de ' +
           b.min + ' à ' + b.max + '.' +
         '</p>' +
@@ -597,6 +601,7 @@ function renderProgress() {
     const up = store.thresholds(li.unit).up;
     const tail = ms.recent.slice(-RULES.levelUpSets);
     const near = tail.length === RULES.levelUpSets && tail.every(v => v >= up);
+    const prog = store.progresNiveau(key, li.unit);
     const best = store.bestAt(key, lvl);
     const suffix = li.unit === 'sec' ? ' s' : '';
 
@@ -617,7 +622,12 @@ function renderProgress() {
         '<i class="' + (i < lvl ? 'f' : '') + '"></i>').join('') + '</div>' +
       '<p class="prog-goal">' + li.name +
         (best ? ' · meilleure série : ' + best + suffix : '') +
-        (near ? ' · <b>prêt pour le niveau ' + (lvl + 1) + '</b>' : '') +
+        (lvl < 6
+          ? (near
+              ? ' · <b>prêt pour le niveau ' + (lvl + 1) + '</b>'
+              : ' · ' + prog.faites + '/' + prog.requis + ' séries à ' +
+                prog.seuil + suffix + ' pour monter')
+          : ' · niveau maximum') +
       '</p>';
 
     el.querySelector('.lvl-edit').addEventListener('click', e => {

@@ -119,6 +119,19 @@ export function thresholds(unit) {
     : { up: RULES.levelUpReps, down: RULES.levelDownReps };
 }
 
+/* Combien de séries consécutives atteignent déjà le seuil, sur les trois
+   demandées. Sans ce compteur affiché, la règle est invisible et la montée
+   de niveau paraît arbitraire. */
+export function progresNiveau(key, unit) {
+  const ms = movementState(key);
+  const seuil = thresholds(unit).up;
+  let n = 0;
+  for (let i = ms.recent.length - 1; i >= 0 && n < RULES.levelUpSets; i--) {
+    if (ms.recent[i] >= seuil) n++; else break;
+  }
+  return { faites: n, requis: RULES.levelUpSets, seuil };
+}
+
 /* Enregistre une série. Renvoie une proposition éventuelle de changement
    de niveau, que l'appelant est libre d'afficher ou non. */
 export function logSet(key, value, unit) {

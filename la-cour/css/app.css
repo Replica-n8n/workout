@@ -25,6 +25,13 @@
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+/* `hidden` vient de la feuille du navigateur, avec une spécificité si faible
+   que n'importe quel `display` d'auteur le bat. Un `.flash{display:flex}` a
+   ainsi laissé un rectangle vert vide de 339×26 px sur l'accueil, attribut
+   `hidden` pourtant présent. On tranche une bonne fois pour toutes, sinon le
+   défaut revient au prochain composant qui déclare son display. */
+[hidden]{display:none !important;}
 html,body{height:100%;}
 body{
   margin:0;background:var(--bg);color:var(--text);
