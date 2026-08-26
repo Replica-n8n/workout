@@ -56,10 +56,45 @@ Démarrer le serveur : `preview_start` avec `{name: "workout"}` (défini dans
 `.claude/launch.json` du dépôt parent), puis naviguer vers
 `http://localhost:8099/<app>/`.
 
+## L'audit automatique
+
+`tools/audit.js` fait la plus grande partie du travail ci-dessous. Il tourne
+**dans la page**, parcourt les écrans en cliquant comme un utilisateur, et
+mesure des rectangles réels :
+
+```js
+const a = await import('/tools/audit.js?t=' + Date.now());
+await a.audit({ ecrans: a.PLAN_LA_COUR, format: 'texte' });
+```
+
+Il couvre les cibles tactiles, les écarts entre cibles, les noms accessibles,
+les contrastes composés, l'action principale hors écran, le défilement de la
+page, le débordement horizontal, les `tabindex` positifs, les images sans
+`alt`, la présence d'une zone `role="status"`, l'attribut `lang` et les règles
+`:focus-visible`.
+
+Un scanner statique de fichiers ne servirait à rien ici : 8 des 25 boutons de
+La Cour sont fabriqués à l'exécution, et les 4 seuls `aria-label` de l'app sont
+dans le JavaScript, pas dans `index.html`.
+
+`PLAN_LA_COUR` décrit comment atteindre chaque écran, y compris ceux qui n'ont
+pas de bouton `[data-goto]`. Une nouvelle app a besoin de son propre plan,
+sinon seuls les écrans atteignables automatiquement sont audités. Chaque étape
+porte un `attendu` : si la navigation dérive, l'audit le signale au lieu de
+mesurer silencieusement le mauvais écran.
+
+⚠️ Ce script est un filet, pas une garantie. Il ne juge ni la clarté des
+libellés, ni la logique d'un parcours, ni ce que la revue de code attrape.
+Vérifie qu'il détecte encore quelque chose de temps en temps, en injectant un
+défaut volontaire : un audit qui renvoie toujours zéro peut être un audit
+cassé.
+
 ## Ce qu'il faut mesurer
 
-Ces points viennent tous de bugs réellement trouvés sur ce projet, pas d'une
-liste générique.
+L'audit couvre la plupart de ces points. Ils sont détaillés ici parce qu'ils
+viennent tous de bugs réellement trouvés sur ce projet, pas d'une liste
+générique, et parce qu'il faut comprendre pourquoi une règle existe pour savoir
+quand elle ne s'applique pas.
 
 **Cibles tactiles.** C'est une app installée sur un téléphone, donc 44 px
 minimum, pas le minimum web de 24 px. Espacement d'au moins 8 px entre deux
