@@ -16,11 +16,20 @@ const fmt = s => {
   return m + ':' + (r < 10 ? '0' + r : r);
 };
 
+/* Une seule zone d'annonce, pour les moments qui comptent. Le décompte du
+   repos n'y passe JAMAIS : annoncer un nombre par seconde rendrait un
+   lecteur d'écran inutilisable. On annonce l'ouverture, pas l'attente. */
+function announce(msg) {
+  const el = $('#announce');
+  if (el) el.textContent = msg;
+}
+
 /* ---------------------------------------------------------------- écrans */
 
 const SCREENS = ['home', 'run', 'progress', 'settings'];
+let navReady = false;
 
-function goto(name) {
+function goto(name, fromPop) {
   SCREENS.forEach(s => {
     const el = $('#screen-' + s);
     if (el) el.hidden = (s !== name);
@@ -30,7 +39,46 @@ function goto(name) {
   if (name === 'home') renderHome();
   if (name === 'progress') renderProgress();
   if (name === 'settings') renderSettings();
+
+  /* Le retour matériel d'Android et le balayage d'iOS doivent revenir d'un
+     écran, pas fermer l'app installée. Chaque écran est donc une entrée
+     d'historique. */
+  if (fromPop) return;
+  if (!navReady) { history.replaceState({ screen: name }, ''); navReady = true; }
+  else if (!history.state || history.state.screen !== name) {
+    history.pushState({ screen: name }, '');
+  }
 }
+
+/* Revenir en arrière DANS l'app doit consommer l'entrée de l'aller, jamais
+   en empiler une nouvelle : sinon le retour matériel repasse par tous les
+   écrans déjà visités au lieu de sortir. */
+function goBack() {
+  const here = history.state && history.state.screen;
+  if (here && here !== 'home') history.back();
+  else goto('home');
+}
+
+window.addEventListener('popstate', e => {
+  const target = (e.state && e.state.screen) || 'home';
+
+  if (document.body.dataset.screen === 'run' && target !== 'run') {
+    pauseRun();
+    goto('home', true);
+    return;
+  }
+
+  /* L'entrée « run » survit à la mise en pause. Y revenir en avant
+     afficherait un écran figé dont les boutons ne répondent plus : on
+     renvoie à l'accueil et on écrase l'entrée morte. */
+  if (target === 'run' && !run) {
+    goto('home', true);
+    history.replaceState({ screen: 'home' }, '');
+    return;
+  }
+
+  goto(target, true);
+});
 
 /* ------------------------------------------------------------- construction
    La liste des séries de la séance, à plat. Une entrée = un écran. */
@@ -201,6 +249,12 @@ function unlock(auto) {
   run.restEndsAt = 0;
   persistRun();
   renderRun();
+  const s = step();
+  if (s) {
+    announce('Série ' + s.setNo + ' sur ' + s.setsTotal + ' ouverte, ' +
+             run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions') +
+             ', ' + s.title);
+  }
   if (auto) signal();
 }
 
@@ -243,16 +297,22 @@ function finish() {
   };
   run = null;
   pendingLevel = null;
+  announce(SESSIONS[summary.type].label + ' terminée, ' + summary.sets + ' séries.');
   renderDone(summary);
   goto('home');
 }
 
-function quitSession() {
+function pauseRun() {
+  if (!run) return;
   stopTicker();
   releaseWake();
   persistRun();
   run = null;
-  goto('home');
+}
+
+function quitSession() {
+  pauseRun();
+  goBack();
 }
 
 /* ---------------------------------------------------------------- rendu */
@@ -563,7 +623,10 @@ function renderProgress() {
     el.querySelector('.lvl-edit').addEventListener('click', e => {
       const d = e.target.dataset.d;
       if (!d) return;
-      store.changeLevel(key, lvl + parseInt(d, 10));
+      const to = lvl + parseInt(d, 10);
+      store.changeLevel(key, to);
+      announce((mv.short || mv.name) + ' passé au niveau ' + to + ', ' +
+               levelInfo(key, st.variant, to).name);
       renderProgress();
     });
     box.appendChild(el);
@@ -678,9 +741,16 @@ function wire() {
     b.addEventListener('click', () => goto(b.dataset.goto));
   });
 
+  $$('[data-back]').forEach(b => {
+    b.addEventListener('click', goBack);
+  });
+
   $$('#settings-variant .opt').forEach(b => {
     b.addEventListener('click', () => {
       store.setVariant(b.dataset.variant);
+      announce(b.dataset.variant === 'strict'
+        ? 'Variante sans matériel activée. Le tirage devient de la chaîne postérieure haute.'
+        : 'Variante avec une table activée. Le tirage est complet.');
       renderSettings();
     });
   });
@@ -688,7 +758,12 @@ function wire() {
   $('#settings-wipe').addEventListener('click', () => {
     if (confirm('Effacer toute la progression et l’historique ? C’est définitif.')) {
       store.wipe();
+      announce('Progression effacée. Tous les mouvements sont revenus au niveau 1.');
       goto('home');
+      const box = $('#home-flash');
+      box.hidden = false;
+      box.innerHTML = '<strong>Progression effacée</strong>' +
+        '<span>Tous les mouvements sont revenus au niveau 1.</span>';
     }
   });
 }

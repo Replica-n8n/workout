@@ -22,6 +22,8 @@
 
 <div class="app">
 
+  <p class="sr-only" id="announce" role="status" aria-atomic="true"></p>
+
   <div class="topbar" id="update-bar" hidden>
     <span>Une nouvelle version est prête.</span>
     <button type="button" id="update-btn">Recharger</button>
@@ -31,7 +33,7 @@
   <section class="screen" id="screen-home">
     <div class="bar">
       <span class="brand">La <em>Cour</em></span>
-      <span style="display:flex;gap:7px;">
+      <span class="bar-actions">
         <button class="iconbtn" type="button" data-goto="progress">Progression</button>
         <button class="iconbtn" type="button" data-goto="settings">Réglages</button>
       </span>
@@ -93,7 +95,7 @@
   <section class="screen" id="screen-progress" hidden>
     <div class="bar">
       <span class="brand">Progression</span>
-      <button class="iconbtn" type="button" data-goto="home">Retour</button>
+      <button class="iconbtn" type="button" data-back>Retour</button>
     </div>
 
     <div class="body">
@@ -109,7 +111,7 @@
     </div>
 
     <div class="foot">
-      <button class="btn-primary" type="button" data-goto="home">Retour</button>
+      <button class="btn-primary" type="button" data-back>Retour</button>
     </div>
   </section>
 
@@ -117,7 +119,7 @@
   <section class="screen" id="screen-settings" hidden>
     <div class="bar">
       <span class="brand">Réglages</span>
-      <button class="iconbtn" type="button" data-goto="home">Retour</button>
+      <button class="iconbtn" type="button" data-back>Retour</button>
     </div>
 
     <div class="body">
@@ -167,13 +169,13 @@
     </div>
 
     <div class="foot">
-      <button class="btn-primary" type="button" data-goto="home">Retour</button>
+      <button class="btn-primary" type="button" data-back>Retour</button>
     </div>
   </section>
 
 </div>
 
-<script>window.LACOUR_VERSION = '1.1.0';</script>
+<script>window.LACOUR_VERSION = '1.2.1';</script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

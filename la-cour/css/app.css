@@ -53,14 +53,18 @@ sup{font-size:.6em;}
 /* ------------------------------------------------------------- en-tête */
 .bar{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:14px var(--pad) 6px;
+  padding:10px var(--pad) 4px;
 }
+.bar-actions{display:flex;gap:8px;}
 .brand{font-family:var(--ff-display);font-size:1.15rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;}
 .brand em{font-style:normal;color:var(--accent);}
+/* 44 px minimum : c'est une app installée sur un téléphone, pas une page web.
+   La hauteur visible reste discrète, c'est la zone touchable qui grandit. */
 .iconbtn{
   appearance:none;border:1px solid var(--line);background:transparent;color:var(--dim);
   font-family:var(--ff-display);font-size:.72rem;font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;padding:7px 11px;cursor:pointer;
+  text-transform:uppercase;padding:0 12px;cursor:pointer;
+  min-height:44px;display:inline-flex;align-items:center;
 }
 .iconbtn:active{background:var(--surface-2);}
 .iconbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
@@ -185,7 +189,7 @@ sup{font-size:.6em;}
 .lvl-edit{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
 .lvl-edit .prog-lvl{min-width:74px;text-align:center;}
 .lvl-edit button{
-  width:38px;height:38px;flex:0 0 auto;border:1px solid var(--line);
+  width:44px;height:44px;flex:0 0 auto;border:1px solid var(--line);
   background:var(--surface-2);font-family:var(--ff-display);
   font-size:1.3rem;font-weight:700;line-height:1;cursor:pointer;
 }
@@ -236,4 +240,10 @@ sup{font-size:.6em;}
 
 @media (prefers-reduced-motion:reduce){
   .card-bar i{transition:none;}
+}
+
+/* Annonces vocales : un seul point de sortie, jamais le décompte brut. */
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;
 }
