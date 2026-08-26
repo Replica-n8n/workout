@@ -30,6 +30,23 @@ le compte à rebours du repos posé dessus, et s'ouvre à zéro.
 - **Série** : un bloc de répétitions suivi d'un repos.
 - **Le Croisé** : le finisher, le vendredi seulement, ajouté à la fin de la séance.
 
+### Niveaux, unités, alternance
+
+**L'unité est portée par le niveau, pas par le mouvement.** Un Superman se tient
+en secondes, mais le Y-T-W du niveau juste au-dessus se compte en répétitions ;
+au gainage, la planche est une tenue alors que le hollow rock est un mouvement.
+Chaque niveau déclare donc `reps` ou `sec`, et le seuil de montée suit : 12
+répétitions, ou 45 secondes pour une tenue. Les records personnels sont gardés
+**par niveau**, puisque 45 secondes de planche et 12 hollow rocks ne se
+comparent pas.
+
+**Le niveau se règle à la main** dans l'écran Progression, avec moins et plus :
+la montée automatique convient à un débutant, pas à quelqu'un qui arrive avec du
+bagage.
+
+**L'alternance A/B est un défaut, pas une contrainte.** Un bouton sur l'accueil
+bascule sur l'autre séance ; l'alternance reprend d'elle-même ensuite.
+
 ### Le programme
 
 Deux séances complètes en alternance, A puis B, 3 à 4 fois par semaine. Six

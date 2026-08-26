@@ -3,7 +3,7 @@
    Une seule série visible à la fois. Le repos verrouille la suivante.
    ========================================================================= */
 
-import { SESSIONS, CROISE, RULES, MOVEMENT_ORDER, movement } from './data.js';
+import { SESSIONS, CROISE, RULES, MOVEMENT_ORDER, movement, levelInfo } from './data.js';
 import * as store from './store.js';
 
 const $  = (s, r = document) => r.querySelector(s);
@@ -43,13 +43,14 @@ function buildSteps(type) {
   session.blocks.forEach((b, bi) => {
     const mv = movement(b.mov, st.variant);
     const lvl = store.levelOf(b.mov);
+    const li = levelInfo(b.mov, st.variant, lvl);
     for (let i = 0; i < b.sets; i++) {
       steps.push({
         mov: b.mov,
-        title: mv.levels[lvl - 1],
+        title: li.name,
         movName: mv.short || mv.name,
         level: lvl,
-        unit: mv.unit,
+        unit: li.unit,
         setNo: i + 1,
         setsTotal: b.sets,
         rest: b.rest,
@@ -65,12 +66,12 @@ function buildSteps(type) {
     const n = store.croiseSets();
     const seq = CROISE.sequence(n);
     const key = 'push_h';
-    const mv = movement(key, st.variant);
     const lvl = store.levelOf(key);
+    const li = levelInfo(key, st.variant, lvl);
     seq.forEach((reps, i) => {
       steps.push({
         mov: key,
-        title: mv.levels[lvl - 1],
+        title: li.name,
         movName: 'Le Croisé',
         level: lvl,
         unit: 'reps',
@@ -426,12 +427,13 @@ function renderHome() {
   session.blocks.forEach((b, i) => {
     const mv = movement(b.mov, st.variant);
     const lvl = store.levelOf(b.mov);
-    const target = store.prefill(b.mov, mv.unit);
+    const li = levelInfo(b.mov, st.variant, lvl);
+    const target = store.prefill(b.mov, li.unit);
     list.appendChild(row(
       String(i + 1),
-      mv.levels[lvl - 1],
+      li.name,
       (mv.short || mv.name) + ' · niveau ' + lvl,
-      b.sets + ' × ' + target + (mv.unit === 'sec' ? ' s' : '')
+      b.sets + ' × ' + target + (li.unit === 'sec' ? ' s' : '')
     ));
   });
   if (withCroise) {
@@ -461,6 +463,9 @@ function renderHome() {
       ' · série ' + (saved.i + 1) + ' sur ' + saved.steps.length;
   }
   $('#home-start').textContent = saved ? 'Recommencer à zéro' : 'Commencer';
+
+  const other = type === 'A' ? 'B' : 'A';
+  $('#home-switch').textContent = 'Faire la séance ' + other + ' à la place';
 }
 
 function row(index, name, sub, value) {
@@ -491,6 +496,7 @@ function renderDone(sum) {
     const p = sum.level;
     const mv = movement(p.mov, store.get().variant);
     const unit = p.unit === 'sec' ? 'secondes' : 'répétitions';
+    void mv;
     const banner = document.createElement('div');
     banner.className = 'banner';
     banner.innerHTML =
@@ -527,20 +533,39 @@ function renderProgress() {
     const mv = movement(key, st.variant);
     const ms = store.movementState(key);
     const lvl = store.levelOf(key);
-    const up = store.thresholds(mv.unit).up;
+    const li = levelInfo(key, st.variant, lvl);
+    const up = store.thresholds(li.unit).up;
     const tail = ms.recent.slice(-RULES.levelUpSets);
     const near = tail.length === RULES.levelUpSets && tail.every(v => v >= up);
+    const best = store.bestAt(key, lvl);
+    const suffix = li.unit === 'sec' ? ' s' : '';
+
     const el = document.createElement('div');
     el.className = 'prog-item';
     el.innerHTML =
-      '<div class="prog-top"><span class="prog-name">' + (mv.short || mv.name) +
-      '</span><span class="prog-lvl">Niveau ' + lvl + '</span></div>' +
+      '<div class="prog-top">' +
+        '<span class="prog-name">' + (mv.short || mv.name) + '</span>' +
+        '<span class="lvl-edit">' +
+          '<button type="button" data-d="-1" aria-label="Niveau précédent"' +
+            (lvl <= 1 ? ' disabled' : '') + '>−</button>' +
+          '<span class="prog-lvl">Niveau ' + lvl + '</span>' +
+          '<button type="button" data-d="1" aria-label="Niveau suivant"' +
+            (lvl >= 6 ? ' disabled' : '') + '>+</button>' +
+        '</span>' +
+      '</div>' +
       '<div class="pips">' + Array.from({ length: 6 }, (_, i) =>
         '<i class="' + (i < lvl ? 'f' : '') + '"></i>').join('') + '</div>' +
-      '<p class="prog-goal">' + mv.levels[lvl - 1] +
-        (ms.best ? ' · meilleure série : ' + ms.best + (mv.unit === 'sec' ? ' s' : '') : '') +
+      '<p class="prog-goal">' + li.name +
+        (best ? ' · meilleure série : ' + best + suffix : '') +
         (near ? ' · <b>prêt pour le niveau ' + (lvl + 1) + '</b>' : '') +
       '</p>';
+
+    el.querySelector('.lvl-edit').addEventListener('click', e => {
+      const d = e.target.dataset.d;
+      if (!d) return;
+      store.changeLevel(key, lvl + parseInt(d, 10));
+      renderProgress();
+    });
     box.appendChild(el);
   });
 
@@ -565,11 +590,11 @@ function renderProgress() {
     return new Date(y, m - 1, d);
   };
   hist.innerHTML = h.length
-    ? h.slice(0, 10).map(s =>
+    ? h.slice(0, 10).map(x =>
         '<div class="hist-row"><span>' +
-        localDate(s.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) +
-        '</span><span>' + SESSIONS[s.type].label + '</span><span>' +
-        s.logged.length + ' séries</span></div>').join('')
+        localDate(x.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) +
+        '</span><span>' + SESSIONS[x.type].label + '</span><span>' +
+        x.logged.length + ' séries</span></div>').join('')
     : '<p class="muted">Rien encore. La première séance apparaîtra ici.</p>';
 }
 
@@ -630,6 +655,15 @@ function wire() {
   $('#home-resume').addEventListener('click', () => {
     const saved = store.loadRun();
     if (saved) startSession(saved.type, saved);
+  });
+
+  // L'alternance A/B est un défaut, pas une prison : elle reprend d'elle-même
+  // au prochain entraînement puisque finishSession bascule sur l'autre.
+  $('#home-switch').addEventListener('click', () => {
+    store.setNext(store.nextSession() === 'A' ? 'B' : 'A');
+    store.clearRun();
+    $('#home-flash').hidden = true;
+    renderHome();
   });
 
   $('#run-action').addEventListener('click', () => {

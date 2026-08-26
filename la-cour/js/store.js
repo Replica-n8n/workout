@@ -10,7 +10,7 @@ const RUN = 'lacour.run.v1';     // séance en cours, pour survivre à une ferme
 
 function blankMovements() {
   const m = {};
-  MOVEMENT_ORDER.forEach(k => { m[k] = { level: 1, best: 0, recent: [] }; });
+  MOVEMENT_ORDER.forEach(k => { m[k] = { level: 1, best: {}, recent: [] }; });
   return m;
 }
 
@@ -32,11 +32,21 @@ function load() {
     if (!raw) return blank();
     const parsed = JSON.parse(raw);
     const base = blank();
+    const movements = { ...base.movements, ...(parsed.movements || {}) };
+    // v1.0 stockait un meilleur score unique par mouvement. Depuis que
+    // l'unité dépend du niveau, un record se garde PAR niveau : 45 secondes
+    // de planche et 12 hollow rocks ne se comparent pas.
+    Object.keys(movements).forEach(k => {
+      const ms = movements[k];
+      if (typeof ms.best === 'number') ms.best = ms.best ? { [ms.level || 1]: ms.best } : {};
+      if (!ms.best || typeof ms.best !== 'object') ms.best = {};
+      if (!Array.isArray(ms.recent)) ms.recent = [];
+    });
     // fusion défensive : une clé absente ne doit jamais casser l'app
     return {
       ...base,
       ...parsed,
-      movements: { ...base.movements, ...(parsed.movements || {}) },
+      movements,
       croise: { ...base.croise, ...(parsed.croise || {}) }
     };
   } catch (e) {
@@ -72,7 +82,7 @@ export function setVariant(v) {
 }
 
 export function movementState(key) {
-  return state.movements[key] || { level: 1, best: 0, recent: [] };
+  return state.movements[key] || { level: 1, best: {}, recent: [] };
 }
 
 export function levelOf(key) {
@@ -94,8 +104,14 @@ export function bounds(value, unit) {
   return { min: Math.max(step, value - span), max: value + span, step };
 }
 
-/* Seuils de montée et de descente, selon l'unité du mouvement.
-   Le gainage se compte en secondes : 30 secondes de planche ne valent pas
+/* Meilleure série à un niveau donné. Un record ne vaut que dans son unité :
+   45 secondes de planche et 12 hollow rocks ne se comparent pas. */
+export function bestAt(key, level) {
+  return movementState(key).best[level] || 0;
+}
+
+/* Seuils de montée et de descente, selon l'unité du NIVEAU en cours.
+   Une tenue se juge en secondes : 30 secondes de planche ne valent pas
    30 répétitions et ne doivent surtout pas franchir le seuil des 12. */
 export function thresholds(unit) {
   return unit === 'sec'
@@ -110,7 +126,8 @@ export function logSet(key, value, unit) {
   if (!ms) return null;
   ms.recent.push(value);
   if (ms.recent.length > 6) ms.recent = ms.recent.slice(-6);
-  if (value > ms.best) ms.best = value;
+  const lv = ms.level || 1;
+  if (!ms.best[lv] || value > ms.best[lv]) ms.best[lv] = value;
   persist();
 
   const t = thresholds(unit);
@@ -154,6 +171,13 @@ export function finishCroise(clean) {
 /* ---------- Séances ---------- */
 
 export function nextSession() { return state.next === 'B' ? 'B' : 'A'; }
+
+/* Choisir soi-même la séance du jour. L'alternance reprend naturellement
+   derrière, puisque finishSession bascule sur l'autre. */
+export function setNext(type) {
+  state.next = type === 'B' ? 'B' : 'A';
+  persist();
+}
 
 export function finishSession(type, logged, croise) {
   state.history.unshift({

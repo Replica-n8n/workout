@@ -2,23 +2,29 @@
    La Cour · catalogue
    Six mouvements, six niveaux chacun. Deux séances. Le Croisé.
    Aucune logique ici, uniquement des données.
+
+   L'unité est portée par le NIVEAU, pas par le mouvement : un Superman se
+   tient en secondes, alors qu'un Y-T-W juste au-dessus se compte en
+   répétitions. Idem au gainage, où la planche est une tenue mais le hollow
+   rock un mouvement.
    ========================================================================= */
 
-/* Les six mouvements. `pull` a deux jeux de niveaux selon la variante :
-   avec une table (recommandé) ou strictement rien. */
+/* Raccourcis de déclaration : r() pour des répétitions, s() pour des secondes. */
+const r = n => ({ n, u: 'reps' });
+const s = n => ({ n, u: 'sec' });
+
 export const MOVEMENTS = {
   push_h: {
     name: 'Poussée horizontale',
     short: 'Poussée horiz.',
     muscles: 'Pectoraux, épaules, triceps',
-    unit: 'reps',
     levels: [
-      'Pompes genoux au sol',
-      'Pompes genoux, 3 s à la descente',
-      'Pompes complètes',
-      'Pompes diamant',
-      'Pompes archer',
-      'Pompes pseudo-planche'
+      r('Pompes genoux au sol'),
+      r('Pompes genoux, 3 s à la descente'),
+      r('Pompes complètes'),
+      r('Pompes diamant'),
+      r('Pompes archer'),
+      r('Pompes pseudo-planche')
     ]
   },
 
@@ -26,14 +32,13 @@ export const MOVEMENTS = {
     name: 'Tirage',
     short: 'Tirage',
     muscles: 'Dos, biceps',
-    unit: 'reps',
     levels: [
-      'Rowing sous table, corps oblique',
-      'Rowing sous table, corps horizontal',
-      'Rowing pieds surélevés',
-      'Rowing une main assistée',
-      'Traction négative, 5 s',
-      'Traction complète'
+      r('Rowing sous table, corps oblique'),
+      r('Rowing sous table, corps horizontal'),
+      r('Rowing pieds surélevés'),
+      r('Rowing une main assistée'),
+      r('Traction négative, 5 s de descente'),
+      r('Traction complète')
     ],
     /* Version stricte : plus aucun objet. Entretient la posture,
        ne construit ni dos ni biceps. Le compromis est assumé. */
@@ -42,12 +47,12 @@ export const MOVEMENTS = {
       short: 'Chaîne post.',
       muscles: 'Trapèzes, deltoïdes postérieurs, lombaires',
       levels: [
-        'Superman, tenue 20 s',
-        'Y-T-W au sol',
-        'Reverse snow angel, lent',
-        'Y-T-W avec pause 3 s',
-        'Superman bras tendus, 45 s',
-        'Reverse snow angel, 5 s par répétition'
+        s('Superman, tenue'),
+        r('Y-T-W au sol'),
+        r('Reverse snow angel, lent'),
+        r('Y-T-W avec pause 3 s par position'),
+        s('Superman bras tendus, tenue'),
+        r('Reverse snow angel, 5 s par répétition')
       ]
     }
   },
@@ -56,14 +61,13 @@ export const MOVEMENTS = {
     name: 'Poussée verticale',
     short: 'Poussée vert.',
     muscles: 'Épaules, triceps',
-    unit: 'reps',
     levels: [
-      'Pompes piquées, bassin haut',
-      'Pompes piquées, front vers le sol',
-      'Pompes piquées, front au sol',
-      'Appui mural, quart d’amplitude',
-      'Appui mural, amplitude complète',
-      'Appui mural, mains rapprochées'
+      r('Pompes piquées, bassin haut'),
+      r('Pompes piquées, front vers le sol'),
+      r('Pompes piquées, front au sol'),
+      r('Appui mural, quart d’amplitude'),
+      r('Appui mural, amplitude complète'),
+      r('Appui mural, mains rapprochées')
     ]
   },
 
@@ -71,14 +75,13 @@ export const MOVEMENTS = {
     name: 'Genou',
     short: 'Genou',
     muscles: 'Quadriceps, fessiers',
-    unit: 'reps',
     levels: [
-      'Squat au poids de corps',
-      'Squat, 3 s à la descente',
-      'Fente marchée',
-      'Fente fendue, pied arrière au sol',
-      'Squat une jambe, main au sol',
-      'Pistol complet'
+      r('Squat au poids de corps'),
+      r('Squat, 3 s à la descente'),
+      r('Fente marchée'),
+      r('Fente fendue, pied arrière au sol'),
+      r('Squat une jambe, main au sol'),
+      r('Pistol complet')
     ]
   },
 
@@ -86,14 +89,13 @@ export const MOVEMENTS = {
     name: 'Hanche',
     short: 'Hanche',
     muscles: 'Ischios, fessiers',
-    unit: 'reps',
     levels: [
-      'Pont fessier deux jambes',
-      'Pont fessier, pause 3 s',
-      'Pont fessier une jambe',
-      'Charnière une jambe, à vide',
-      'Curl ischio glissé, deux jambes',
-      'Curl ischio glissé, une jambe'
+      r('Pont fessier deux jambes'),
+      r('Pont fessier, pause 3 s en haut'),
+      r('Pont fessier une jambe'),
+      r('Charnière une jambe, à vide'),
+      r('Curl ischio glissé, deux jambes'),
+      r('Curl ischio glissé, une jambe')
     ]
   },
 
@@ -101,22 +103,19 @@ export const MOVEMENTS = {
     name: 'Gainage',
     short: 'Gainage',
     muscles: 'Abdominaux, chaîne antérieure',
-    unit: 'sec',
     levels: [
-      'Planche',
-      'Hollow hold genoux pliés',
-      'Hollow hold jambes tendues',
-      'Hollow rock',
-      'Body saw',
-      'Planche une main'
+      s('Planche'),
+      s('Hollow hold genoux pliés'),
+      s('Hollow hold jambes tendues'),
+      r('Hollow rock'),
+      r('Body saw'),
+      s('Planche une main')
     ]
   }
 };
 
 export const MOVEMENT_ORDER = ['push_h', 'pull', 'push_v', 'knee', 'hip', 'core'];
 
-/* Les deux séances. `rest` en secondes. `unilateral` double les séries
-   annoncées, une jambe ou un côté à la fois. */
 export const SESSIONS = {
   A: {
     label: 'Séance A',
@@ -158,17 +157,15 @@ export const CROISE = {
   total(n) { return this.sequence(n).reduce((a, b) => a + b, 0); }
 };
 
-/* Règles de progression, en un seul endroit. */
 export const RULES = {
   levelUpReps: 12,      // 3 séries à ce chiffre font monter d'un niveau
-  levelUpSec: 45,       // en gainage on compte des secondes, pas des répétitions
+  levelUpSec: 45,       // une tenue se juge en secondes, pas en répétitions
   levelUpSets: 3,
-  levelDownReps: 5,     // deux séances sous ce chiffre proposent de redescendre
+  levelDownReps: 5,
   levelDownSec: 15,
-  levelDownSessions: 2,
   adjustRange: 10,      // le réglage va de la valeur pré-remplie ± ceci
   defaultReps: 8,
-  defaultSec: 30,
+  defaultSec: 20,
   secStep: 5,
   croiseGapDays: 6      // délai minimum entre deux Croisés
 };
@@ -176,8 +173,13 @@ export const RULES = {
 /* Résout un mouvement selon la variante choisie. */
 export function movement(key, variant) {
   const m = MOVEMENTS[key];
-  if (key === 'pull' && variant === 'strict') {
-    return { ...m, ...m.strict, unit: 'reps' };
-  }
+  if (key === 'pull' && variant === 'strict') return { ...m, ...m.strict };
   return m;
+}
+
+/* Le niveau demandé, avec son nom et son unité. */
+export function levelInfo(key, variant, level) {
+  const m = movement(key, variant);
+  const lv = m.levels[Math.min(6, Math.max(1, level)) - 1];
+  return { name: lv.n, unit: lv.u };
 }
