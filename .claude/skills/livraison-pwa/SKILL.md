@@ -63,9 +63,14 @@ Démarrer le serveur : `preview_start` avec `{name: "workout"}` (défini dans
 mesure des rectangles réels :
 
 ```js
-const a = await import('/tools/audit.js?t=' + Date.now());
+const a = await import('../tools/audit.js?t=' + Date.now());
 await a.audit({ ecrans: a.PLAN_LA_COUR, format: 'texte' });
 ```
+
+⚠️ Le chemin est **relatif**, et il faut y tenir. En production, Pages sert le
+dépôt sous `/workout/`, donc `/tools/audit.js` chercherait à la racine du
+domaine et échouerait. En local le serveur a le dépôt pour racine, les deux
+formes marchent, et le bug reste invisible jusqu'à la mise en ligne.
 
 Il couvre les cibles tactiles, les écarts entre cibles, les noms accessibles,
 les contrastes composés, l'action principale hors écran, le défilement de la
@@ -142,6 +147,17 @@ Trois mots, et un quatrième est un bug : **niveau** (difficulté d'un mouvement
 finisher du vendredi). « Palier », « barreau », « échelle » ont été bannis
 après que l'utilisateur s'est perdu dans sa propre app. Si un synonyme
 réapparaît dans une chaîne affichée, c'est une régression.
+
+## Après avoir poussé
+
+Relancer l'audit **sur la production**, pas seulement en local. Certaines
+choses ne se prouvent que là : le chemin de base sous `/workout/`, le type MIME
+du `.webmanifest`, la portée réelle du service worker, le contenu du cache.
+C'est ce passage qui a révélé que le chemin absolu documenté ici était faux.
+
+```
+https://replica-n8n.github.io/workout/<app>/
+```
 
 ## Avant de pousser
 

@@ -14,11 +14,16 @@
 
    Usage
    -----
-   Depuis javascript_tool, ou depuis la console du navigateur :
+   Depuis javascript_tool, ou depuis la console du navigateur, en étant sur
+   la page d'une app. Le chemin est RELATIF, et ce n'est pas un détail : en
+   production GitHub Pages sert le dépôt sous /workout/, donc un chemin
+   absolu « /tools/audit.js » cherche à la racine du domaine et échoue.
+   En local, où le serveur a le dépôt pour racine, les deux marchent : le
+   bug ne se voit qu'une fois en ligne.
 
-       const a = await import('/tools/audit.js');
-       await a.audit();                       // rapport complet
-       await a.audit({ format: 'texte' });    // résumé lisible
+       const a = await import('../tools/audit.js?t=' + Date.now());
+       await a.audit({ ecrans: a.PLAN_LA_COUR });            // rapport complet
+       await a.audit({ ecrans: a.PLAN_LA_COUR, format: 'texte' });
 
    Les règles viennent de bugs réellement trouvés sur ce dépôt, pas d'une
    liste générique. Chaque constat porte la mesure qui l'a déclenché : c'est
