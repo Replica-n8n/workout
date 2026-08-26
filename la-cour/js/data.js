@@ -1,6 +1,6 @@
 /* =========================================================================
    La Cour · catalogue
-   Six mouvements, six niveaux chacun. Deux séances. Le Croisé.
+   Six mouvements, six niveaux chacun. Une séance. Le Croisé.
    Aucune logique ici, uniquement des données.
 
    L'unité est portée par le NIVEAU, pas par le mouvement : un Superman se
@@ -116,32 +116,28 @@ export const MOVEMENTS = {
 
 export const MOVEMENT_ORDER = ['push_h', 'pull', 'push_v', 'knee', 'hip', 'core'];
 
-export const SESSIONS = {
-  A: {
-    label: 'Séance A',
-    name: 'Horizontale',
-    blocks: [
-      { mov: 'push_h', sets: 4, rest: 150 },
-      { mov: 'pull',   sets: 4, rest: 150 },
-      { mov: 'knee',   sets: 3, rest: 120 },
-      { mov: 'hip',    sets: 3, rest: 90  },
-      { mov: 'core',   sets: 3, rest: 60  }
-    ]
-  },
-  B: {
-    label: 'Séance B',
-    name: 'Verticale',
-    blocks: [
-      { mov: 'push_v', sets: 4, rest: 150 },
-      { mov: 'pull',   sets: 3, rest: 150 },
-      { mov: 'knee',   sets: 3, rest: 120, unilateral: true },
-      { mov: 'hip',    sets: 3, rest: 90  },
-      { mov: 'core',   sets: 3, rest: 60,  unilateral: true }
-    ]
-  }
+/* UNE seule séance, faite 3 à 4 fois par semaine.
+
+   Il y en avait deux, A et B, mais elles partageaient quatre mouvements sur
+   cinq à l'identique : deux séances qui n'en étaient pas. La cause était mon
+   choix de faire passer les six mouvements à chaque fois, ce qui les rendait
+   forcément jumelles. Autant l'assumer.
+
+   Trois séries partout : 12 séries par mouvement et par semaine à raison de
+   quatre séances, ce qui tombe dans la fourchette utile. */
+export const SEANCE = {
+  label: 'La séance',
+  blocks: [
+    { mov: 'push_h', sets: 3, rest: 150 },
+    { mov: 'pull',   sets: 3, rest: 150 },
+    { mov: 'push_v', sets: 3, rest: 120 },
+    { mov: 'knee',   sets: 3, rest: 120 },
+    { mov: 'hip',    sets: 3, rest: 90  },
+    { mov: 'core',   sets: 3, rest: 60  }
+  ]
 };
 
-/* Le Croisé, ajouté à la fin de la séance B, une fois par semaine.
+/* Le Croisé, ajouté à la fin de la séance, une fois par semaine.
    La taille monte de 2 en 2 jusqu'à 20, la version d'origine de la vidéo. */
 export const CROISE = {
   rest: 18,

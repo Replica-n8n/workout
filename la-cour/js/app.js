@@ -3,8 +3,9 @@
    Une seule série visible à la fois. Le repos verrouille la suivante.
    ========================================================================= */
 
-import { SESSIONS, CROISE, RULES, MOVEMENT_ORDER, movement, levelInfo } from './data.js';
+import { SEANCE, CROISE, RULES, MOVEMENT_ORDER, movement, levelInfo } from './data.js';
 import * as store from './store.js';
+import * as media from './media.js';
 
 const $  = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
@@ -83,9 +84,9 @@ window.addEventListener('popstate', e => {
 /* ------------------------------------------------------------- construction
    La liste des séries de la séance, à plat. Une entrée = un écran. */
 
-function buildSteps(type) {
+function buildSteps() {
   const st = store.get();
-  const session = SESSIONS[type];
+  const session = SEANCE;
   const steps = [];
 
   session.blocks.forEach((b, bi) => {
@@ -110,7 +111,7 @@ function buildSteps(type) {
     }
   });
 
-  if (type === 'B' && store.croiseDue()) {
+  if (store.croiseDue()) {
     const n = store.croiseSets();
     const seq = CROISE.sequence(n);
     const key = 'push_h';
@@ -144,13 +145,11 @@ function buildSteps(type) {
 let run = null;          // { type, steps, i, phase, restEndsAt, value, logged, croiseClean, startedAt }
 let ticker = null;
 let wakeLock = null;
-let audioCtx = null;
 let pendingLevel = null; // proposition de changement de niveau en attente
 
-function startSession(type, resumed) {
-  const steps = resumed ? resumed.steps : buildSteps(type);
+function startSession(resumed) {
+  const steps = resumed ? resumed.steps : buildSteps();
   run = resumed || {
-    type,
     steps,
     i: 0,
     phase: 'ready',
@@ -163,6 +162,12 @@ function startSession(type, resumed) {
   if (run.value === null || run.value === undefined) run.value = defaultValue();
   pendingLevel = null;
   keepAwake();
+  /* Le geste qui a lancé la séance autorise la lecture audio : c'est le seul
+     moment où l'on peut ouvrir la session média. */
+  media.demarrer({
+    suivant: () => { if (run && run.phase === 'rest') unlock(false); },
+    pause: () => quitSession()
+  }).then(() => peindreVerrouillage());
   goto('run');
   renderRun();
   startTicker();
@@ -202,12 +207,38 @@ function paintClock() {
   if (el && run) el.textContent = fmt((Date.now() - run.startedAt) / 1000);
 }
 
+/* Le lecteur du verrouillage porte l'information qui change : le temps
+   restant en titre, ce qui vient ensuite juste en dessous. */
+function peindreVerrouillage(left) {
+  /* Appelé depuis une promesse : la séance peut avoir été mise en pause
+     entre-temps, auquel cas `run` est nul et step() déréférencerait null. */
+  if (!run) return;
+  const s = step();
+  if (!s) return;
+  if (run && run.phase === 'rest') {
+    const reste = left !== undefined ? left : (run.restEndsAt - Date.now()) / 1000;
+    media.afficher({
+      titre: 'Repos ' + fmt(reste),
+      sousTitre: 'Puis série ' + s.setNo + ' sur ' + s.setsTotal + ' · ' +
+                 run.value + (s.unit === 'sec' ? ' s' : ' reps'),
+      detail: s.title
+    });
+  } else {
+    media.afficher({
+      titre: 'Série ' + s.setNo + ' sur ' + s.setsTotal,
+      sousTitre: run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions'),
+      detail: s.title
+    });
+  }
+}
+
 function paintRest(left) {
   const s = step();
   const t = $('#focus-time');
   const bar = $('#focus-bar-fill');
   if (t) t.textContent = fmt(left);
   if (bar && s) bar.style.width = Math.round(100 * (1 - left / s.rest)) + '%';
+  peindreVerrouillage(left);
 }
 
 /* ------------------------------------------------------------- les actions */
@@ -255,7 +286,7 @@ function unlock(auto) {
              run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions') +
              ', ' + s.title);
   }
-  if (auto) signal();
+  if (auto) media.bip();
 }
 
 function adjust(delta) {
@@ -284,12 +315,12 @@ function abortCroise() {
 function finish() {
   stopTicker();
   releaseWake();
+  media.arreter();
   const hadCroise = run.steps.some(s => s.croise);
   if (hadCroise) store.finishCroise(run.croiseClean);
-  store.finishSession(run.type, run.logged, hadCroise ? { sets: store.croiseSets(), clean: run.croiseClean } : null);
+  store.finishSession(run.logged, hadCroise ? { sets: store.croiseSets(), clean: run.croiseClean } : null);
   store.clearRun();
   const summary = {
-    type: run.type,
     minutes: Math.round((Date.now() - run.startedAt) / 60000),
     sets: run.logged.length,
     croise: hadCroise ? run.croiseClean : null,
@@ -297,7 +328,7 @@ function finish() {
   };
   run = null;
   pendingLevel = null;
-  announce(SESSIONS[summary.type].label + ' terminée, ' + summary.sets + ' séries.');
+  announce('Séance terminée, ' + summary.sets + ' séries.');
   renderDone(summary);
   goto('home');
 }
@@ -306,6 +337,7 @@ function pauseRun() {
   if (!run) return;
   stopTicker();
   releaseWake();
+  media.arreter();
   persistRun();
   run = null;
 }
@@ -349,6 +381,7 @@ function renderRun() {
   renderFocus(s);
   renderDoneList(s);
   paintClock();
+  peindreVerrouillage();
 }
 
 function chip(text, accent) {
@@ -451,11 +484,13 @@ function wireLevelBanner() {
 function renderDoneList(s) {
   const box = $('#run-done');
   // uniquement les séries du mouvement en cours
+  /* Ordre chronologique : la série 1 en haut. L'ordre décroissant collait la
+     plus récente à la carte en cours, mais surprenait à la lecture. */
   const here = [];
   for (let k = run.i - 1; k >= 0; k--) {
     const st = run.steps[k];
     if (st.block !== s.block) break;
-    here.push({ n: st.setNo, v: run.logged[k] ? run.logged[k].value : '–' });
+    here.unshift({ n: st.setNo, v: run.logged[k] ? run.logged[k].value : '–' });
   }
   if (!here.length) { box.innerHTML = ''; return; }
   box.innerHTML =
@@ -471,19 +506,18 @@ function renderDoneList(s) {
 
 function renderHome() {
   const st = store.get();
-  const type = store.nextSession();
-  const session = SESSIONS[type];
+  const session = SEANCE;
   const saved = store.loadRun();
 
   $('#home-date').textContent = new Date().toLocaleDateString('fr-FR',
     { weekday: 'long', day: 'numeric', month: 'long' });
-  $('#home-session').textContent = session.label;
+  $('#home-session').textContent = 'La séance';
 
-  const withCroise = type === 'B' && store.croiseDue();
+  const withCroise = store.croiseDue();
   // durée honnête : travail + repos, moins le dernier repos de chaque bloc
   const mins = session.blocks.reduce(
     (a, b) => a + (b.sets * (b.rest + 30) - b.rest) / 60, 0) + 5;
-  $('#home-sub').textContent = session.name + ' · ' +
+  $('#home-sub').textContent = session.blocks.length + ' mouvements · ' +
     Math.round(mins + (withCroise ? 12 : 0)) + ' min';
 
   const list = $('#home-list');
@@ -523,13 +557,10 @@ function renderHome() {
   const resume = $('#home-resume');
   resume.hidden = !saved;
   if (saved) {
-    resume.textContent = 'Reprendre la séance ' + saved.type +
-      ' · série ' + (saved.i + 1) + ' sur ' + saved.steps.length;
+    resume.textContent = 'Reprendre · série ' + (saved.i + 1) +
+      ' sur ' + saved.steps.length;
   }
   $('#home-start').textContent = saved ? 'Recommencer à zéro' : 'Commencer';
-
-  const other = type === 'A' ? 'B' : 'A';
-  $('#home-switch').textContent = 'Faire la séance ' + other + ' à la place';
 }
 
 function row(index, name, sub, value) {
@@ -546,7 +577,7 @@ function renderDone(sum) {
   const box = $('#home-flash');
   box.hidden = false;
   box.innerHTML =
-    '<strong>' + SESSIONS[sum.type].label + ' terminée</strong>' +
+    '<strong>Séance terminée</strong>' +
     '<span>' + sum.sets + ' séries en ' +
     (sum.minutes < 1 ? 'moins d’une minute' : sum.minutes + ' minutes') +
     (sum.croise === true ? ' · Croisé bouclé, plus 2 séries la prochaine fois'
@@ -666,7 +697,7 @@ function renderProgress() {
     ? h.slice(0, 10).map(x =>
         '<div class="hist-row"><span>' +
         localDate(x.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) +
-        '</span><span>' + SESSIONS[x.type].label + '</span><span>' +
+        '</span><span>' + (x.croise ? 'Séance + Croisé' : 'Séance') + '</span><span>' +
         x.logged.length + ' séries</span></div>').join('')
     : '<p class="muted">Rien encore. La première séance apparaîtra ici.</p>';
 }
@@ -697,46 +728,18 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-/* Bip court plus vibration, à la fin du repos. Le téléphone est dans la poche. */
-function signal() {
-  try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
-  try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = 'square';
-    o.frequency.value = 880;
-    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.15, audioCtx.currentTime + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.28);
-    o.connect(g); g.connect(audioCtx.destination);
-    o.start(); o.stop(audioCtx.currentTime + 0.3);
-  } catch (e) {}
-}
-
 /* --------------------------------------------------------------- démarrage */
 
 function wire() {
   $('#home-start').addEventListener('click', () => {
     store.clearRun();
     $('#home-flash').hidden = true;
-    if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-    startSession(store.nextSession());
+    startSession();
   });
 
   $('#home-resume').addEventListener('click', () => {
     const saved = store.loadRun();
-    if (saved) startSession(saved.type, saved);
-  });
-
-  // L'alternance A/B est un défaut, pas une prison : elle reprend d'elle-même
-  // au prochain entraînement puisque finishSession bascule sur l'autre.
-  $('#home-switch').addEventListener('click', () => {
-    store.setNext(store.nextSession() === 'A' ? 'B' : 'A');
-    store.clearRun();
-    $('#home-flash').hidden = true;
-    renderHome();
+    if (saved) startSession(saved);
   });
 
   $('#run-action').addEventListener('click', () => {

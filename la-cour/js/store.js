@@ -19,8 +19,7 @@ function blank() {
     variant: 'table',                 // 'table' | 'strict'
     movements: blankMovements(),
     croise: { sets: CROISE.minSets, lastDate: null },
-    next: 'A',
-    history: []                       // { date, type, logged[], croise? }
+    history: []                       // { date, logged[], croise? }
   };
 }
 
@@ -183,31 +182,20 @@ export function finishCroise(clean) {
 
 /* ---------- Séances ---------- */
 
-export function nextSession() { return state.next === 'B' ? 'B' : 'A'; }
-
-/* Choisir soi-même la séance du jour. L'alternance reprend naturellement
-   derrière, puisque finishSession bascule sur l'autre. */
-export function setNext(type) {
-  state.next = type === 'B' ? 'B' : 'A';
-  persist();
-}
-
-export function finishSession(type, logged, croise) {
+export function finishSession(logged, croise) {
   state.history.unshift({
     date: today(),
-    type,
     logged,
     croise: croise || null
   });
   if (state.history.length > 60) state.history = state.history.slice(0, 60);
-  state.next = type === 'A' ? 'B' : 'A';
   persist();
 }
 
 /* Douze dernières séances prévues, pour la barre de régularité.
    On compte les jours d'entraînement réels, pas une série imaginaire. */
 export function recentDone(n = 12) {
-  return state.history.slice(0, n).map(h => h.type);
+  return state.history.slice(0, n);
 }
 
 /* ---------- séance en cours ---------- */

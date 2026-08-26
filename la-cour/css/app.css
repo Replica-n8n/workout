@@ -182,10 +182,8 @@ sup{font-size:.6em;}
 .tick{width:15px;height:15px;flex:0 0 auto;background:var(--good);color:var(--bg);display:grid;place-items:center;font-size:.6rem;line-height:1;}
 .done-name{flex:1 1 auto;font-family:var(--ff-display);letter-spacing:.08em;text-transform:uppercase;font-weight:700;font-size:.75rem;}
 .done-val{font-family:var(--ff-display);font-variant-numeric:tabular-nums;font-weight:700;font-size:.98rem;color:var(--good);}
-.done-row:nth-child(3){opacity:.72;}
-.done-row:nth-child(4){opacity:.5;}
-.done-row:nth-child(5){opacity:.34;}
-.done-row:nth-child(n+6){opacity:.22;}
+/* Pas de dégradé : en ordre chronologique il effacerait la série la plus
+   récente, qui est justement celle qu'on veut relire. */
 
 /* ---------------------------------------------------------- progression */
 .prog-item{padding:13px 0;border-bottom:1px solid var(--line);}
