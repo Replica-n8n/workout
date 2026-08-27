@@ -278,26 +278,31 @@ function paintClock() {
 
 /* Le lecteur du verrouillage porte l'information qui change : le temps
    restant en titre, ce qui vient ensuite juste en dessous. */
-function peindreVerrouillage(left) {
+function peindreVerrouillage() {
   /* Appelé depuis une promesse : la séance peut avoir été mise en pause
      entre-temps, auquel cas `run` est nul et step() déréférencerait null. */
   if (!run) return;
   const s = step();
   if (!s) return;
-  if (run && run.phase === 'rest') {
-    const reste = left !== undefined ? left : (run.restEndsAt - Date.now()) / 1000;
+  const unite = s.unit === 'sec' ? ' secondes' : ' répétitions';
+
+  if (run.phase === 'rest') {
+    /* Texte figé pendant tout le repos. Seule la barre native bouge, animée
+       par le système : sans ça le bloc entier clignotait chaque seconde. */
     media.afficher({
-      titre: 'Repos ' + fmt(reste),
-      sousTitre: 'Puis série ' + s.setNo + ' sur ' + s.setsTotal + ' · ' +
-                 run.value + (s.unit === 'sec' ? ' s' : ' reps'),
+      titre: 'Repos · série ' + s.setNo + ' sur ' + s.setsTotal,
+      sousTitre: 'Ensuite ' + run.value + unite,
       detail: s.title
     });
+    const reste = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
+    media.position(s.rest, s.rest - reste);
   } else {
     media.afficher({
       titre: 'Série ' + s.setNo + ' sur ' + s.setsTotal,
-      sousTitre: run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions'),
+      sousTitre: run.value + unite,
       detail: s.title
     });
+    media.effacerPosition();
   }
 }
 
@@ -307,7 +312,6 @@ function paintRest(left) {
   const bar = $('#focus-bar-fill');
   if (t) t.textContent = fmt(left);
   if (bar && s) bar.style.width = Math.round(100 * (1 - left / s.rest)) + '%';
-  peindreVerrouillage(left);
 }
 
 /* ------------------------------------------------------------- les actions */
@@ -809,7 +813,7 @@ function releaseWake() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    if (run) { keepAwake(); renderRun(); }
+    if (run) { keepAwake(); renderRun(); }   // renderRun repose aussi la barre
   }
 });
 

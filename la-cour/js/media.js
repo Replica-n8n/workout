@@ -94,6 +94,7 @@ export async function demarrer(handlers = {}) {
 }
 
 export function arreter() {
+  effacerPosition();
   actif = false;
   dernierAffichage = '';
   try { if (audio) { audio.pause(); audio.src = ''; audio = null; } } catch (e) {}
@@ -106,6 +107,29 @@ export function arreter() {
 }
 
 export function disponible() { return actif; }
+
+/* Le compte à rebours passe par setPositionState, PAS par le titre.
+
+   Réécrire le titre chaque seconde remplace tout l'objet MediaMetadata, et le
+   système redessine alors le bloc entier : titre, sous-titre et vignette
+   clignotent une fois par seconde. setPositionState alimente la barre de
+   progression native, que le système anime tout seul à partir d'une seule
+   pose. Le texte, lui, ne bouge plus qu'aux changements de série. */
+export function position(duree, ecoule) {
+  if (!actif || !('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: Math.max(1, duree),
+      position: Math.min(Math.max(0, ecoule), Math.max(1, duree)),
+      playbackRate: 1
+    });
+  } catch (e) { /* API absente : on perd la barre, pas le reste */ }
+}
+
+export function effacerPosition() {
+  if (!('mediaSession' in navigator)) return;
+  try { navigator.mediaSession.setPositionState(); } catch (e) {}
+}
 
 /* Ce qui s'affiche sur l'écran de verrouillage. Le titre porte l'information
    qui change, parce que c'est la ligne la plus lisible du lecteur. */
