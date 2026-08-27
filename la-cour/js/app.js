@@ -278,6 +278,22 @@ function paintClock() {
 
 /* Le lecteur du verrouillage porte l'information qui change : le temps
    restant en titre, ce qui vient ensuite juste en dessous. */
+/* À quelle fréquence réécrire l'écran de verrouillage.
+
+   Chaque seconde, le bloc entier clignote : réécrire le titre remplace tout
+   l'objet MediaMetadata et le système redessine tout. Ne jamais le réécrire
+   fait disparaître le chrono, et la barre native d'Android n'affiche aucun
+   chiffre. On écrit donc rarement quand il reste du temps, et chaque seconde
+   dans les dix dernières, quand la valeur sert vraiment.
+
+   Environ 28 réécritures sur un repos de 2 min 30, au lieu de 150. */
+function cadence(reste) {
+  if (reste <= 10) return 1;
+  if (reste <= 30) return 5;
+  if (reste <= 60) return 10;
+  return 15;
+}
+
 function peindreVerrouillage() {
   /* Appelé depuis une promesse : la séance peut avoir été mise en pause
      entre-temps, auquel cas `run` est nul et step() déréférencerait null. */
@@ -287,14 +303,18 @@ function peindreVerrouillage() {
   const unite = s.unit === 'sec' ? ' secondes' : ' répétitions';
 
   if (run.phase === 'rest') {
-    /* Texte figé pendant tout le repos. Seule la barre native bouge, animée
-       par le système : sans ça le bloc entier clignotait chaque seconde. */
+    const reste = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
+    /* La valeur affichée est arrondie au palier de la cadence. Deux appels
+       dans le même palier produisent le même texte, et `afficher` ignore un
+       texte identique : pas de compteur à tenir. */
+    const pas = cadence(reste);
+    const palier = Math.ceil(reste / pas) * pas;
     media.afficher({
-      titre: 'Repos · série ' + s.setNo + ' sur ' + s.setsTotal,
-      sousTitre: 'Ensuite ' + run.value + unite,
+      titre: 'Repos ' + fmt(palier),
+      sousTitre: 'Série ' + s.setNo + ' sur ' + s.setsTotal + ' · ensuite ' +
+                 run.value + unite,
       detail: s.title
     });
-    const reste = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
     media.position(s.rest, s.rest - reste);
   } else {
     media.afficher({
@@ -312,6 +332,7 @@ function paintRest(left) {
   const bar = $('#focus-bar-fill');
   if (t) t.textContent = fmt(left);
   if (bar && s) bar.style.width = Math.round(100 * (1 - left / s.rest)) + '%';
+  peindreVerrouillage();
 }
 
 /* ------------------------------------------------------------- les actions */
