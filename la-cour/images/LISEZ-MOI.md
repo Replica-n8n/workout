@@ -81,6 +81,44 @@ Les 30 identifiants, à copier dans leur recherche :
 3300 3747 3928 3983 5041 5649 6350 7385 7746 10045
 ```
 
+## Les 30 fiches produit, à vérifier avant d'acheter
+
+La recherche du site attend le paramètre `search_query`, pas `s` :
+`https://gymvisual.com/search?controller=search&search_query=0145`
+
+| ID | Nom | Illustration | GIF animé |
+|---|---|---|---|
+| **0145** | Butt Bridge | [voir](https://gymvisual.com/illustrations/165-butt-bridge.html) | [voir](https://gymvisual.com/animated-gifs/4398-butt-bridge.html) |
+| **0283** | Diamond Push-up | [voir](https://gymvisual.com/illustrations/303-diamond-push-up.html) | [voir](https://gymvisual.com/animated-gifs/1776-diamond-push-up.html) |
+| **0463** | Front Plank | [voir](https://gymvisual.com/illustrations/483-front-plank.html) | [voir](https://gymvisual.com/animated-gifs/4401-front-plank-male.html) |
+| **0471** | Handstand Push-Up | [voir](https://gymvisual.com/illustrations/491-handstand-push-up.html) | [voir](https://gymvisual.com/animated-gifs/1970-handstand-push-up.html) |
+| **0499** | Inverted Row | [voir](https://gymvisual.com/illustrations/519-inverted-row.html) | [voir](https://gymvisual.com/animated-gifs/1998-inverted-row.html) |
+| **0652** | Pull-up | [voir](https://gymvisual.com/illustrations/672-pull-up.html) | [voir](https://gymvisual.com/animated-gifs/2145-pull-up.html) |
+| **0662** | Push-up | [voir](https://gymvisual.com/illustrations/682-push-up.html) | [voir](https://gymvisual.com/animated-gifs/2155-push-up-m.html) |
+| **0726** | Single Leg Bridge | [voir](https://gymvisual.com/illustrations/746-single-leg-bridge.html) | [voir](https://gymvisual.com/animated-gifs/4415-single-leg-bridge.html) |
+| **0732** | Single Leg Squat (pistol) | [voir](https://gymvisual.com/illustrations/752-single-leg-squat-pistol.html) | [voir](https://gymvisual.com/animated-gifs/2216-single-leg-squat-pistol.html) |
+| **0781** | Split Squat | [voir](https://gymvisual.com/illustrations/801-split-squat.html) | [voir](https://gymvisual.com/animated-gifs/2264-split-squat.html) |
+| **0787** | Squat | [voir](https://gymvisual.com/illustrations/807-squat.html) | [voir](https://gymvisual.com/animated-gifs/2270-squat.html) |
+| **0804** | Superman | [voir](https://gymvisual.com/illustrations/824-superman.html) | [voir](https://gymvisual.com/animated-gifs/2286-superman.html) |
+| **1182** | Push-up (on knees) | [voir](https://gymvisual.com/illustrations/1331-push-up-on-knees.html) | [voir](https://gymvisual.com/animated-gifs/2635-push-up-on-knees.html) |
+| **1246** | Hollow Hold | [voir](https://gymvisual.com/illustrations/1463-hollow-hold.html) | [voir](https://gymvisual.com/animated-gifs/4440-hollow-hold.html) |
+| **1460** | Walking Lunge | [voir](https://gymvisual.com/illustrations/3006-walking-lunge.html) | [voir](https://gymvisual.com/animated-gifs/3207-walking-lunge-male.html) |
+| **1773** | One Arm Towel Row | [voir](https://gymvisual.com/illustrations/3805-one-arm-towel-row.html) | [voir](https://gymvisual.com/animated-gifs/3813-one-arm-towel-row.html) |
+| **2298** | Inverted Row on Bench | [voir](https://gymvisual.com/illustrations/4920-inverted-row-on-bench.html) | [voir](https://gymvisual.com/animated-gifs/4949-inverted-row-on-bench.html) |
+| **2861** | Saw | [voir](https://gymvisual.com/illustrations/6249-saw.html) | [voir](https://gymvisual.com/animated-gifs/6365-saw-female.html) |
+| **2921** | Pike Push up | [voir](https://gymvisual.com/illustrations/6408-pike-push-up.html) | [voir](https://gymvisual.com/animated-gifs/6735-pike-push-up.html) |
+| **3294** | Archer Push up | [voir](https://gymvisual.com/illustrations/7397-archer-push-up.html) | [voir](https://gymvisual.com/animated-gifs/7188-archer-push-up.html) |
+| **3300** | Lean planche | [voir](https://gymvisual.com/illustrations/7403-lean-planche.html) | [voir](https://gymvisual.com/animated-gifs/7194-lean-planche.html) |
+| **3747** | Assisted Pistol Squat with Bed Sheet | [voir](https://gymvisual.com/illustrations/8594-assisted-pistol-squat-with-bed-sheet.html) | [voir](https://gymvisual.com/animated-gifs/9945-assisted-pistol-squat-with-bed-sheet.html) |
+| **3928** | Bodyweight Single Leg Deadlift | [voir](https://gymvisual.com/illustrations/12895-bodyweight-single-leg-deadlift.html) | [voir](https://gymvisual.com/animated-gifs/12973-bodyweight-single-leg-deadlift.html) |
+| **3983** | One Arm Front Plank | [voir](https://gymvisual.com/illustrations/9259-one-arm-front-plank.html) | [voir](https://gymvisual.com/animated-gifs/10071-one-arm-front-plank.html) |
+| **5041** | Lying Prone T | [voir](https://gymvisual.com/illustrations/13599-lying-prone-t.html) | [voir](https://gymvisual.com/animated-gifs/13651-lying-prone-t.html) |
+| **5649** | Hollow Rock (male) | [voir](https://gymvisual.com/illustrations/16394-hollow-rock-male.html) | [voir](https://gymvisual.com/animated-gifs/16423-hollow-rock-male.html) |
+| **6350** | Lying Prone Y Raise | [voir](https://gymvisual.com/illustrations/18412-lying-prone-y-raise.html) | [voir](https://gymvisual.com/animated-gifs/18420-lying-prone-y-raise.html) |
+| **7385** | Pull-up (negative) (male) | [voir](https://gymvisual.com/illustrations/19413-pull-up-negative-male.html) | [voir](https://gymvisual.com/animated-gifs/19632-pull-up-negative-male.html) |
+| **7746** | Nordic Hamstring Curl (male) | [voir](https://gymvisual.com/illustrations/18416-nordic-hamstring-curl-male.html) | [voir](https://gymvisual.com/animated-gifs/18424-nordic-hamstring-curl-male.html) |
+| **10045** | Snow Angel Face to Floor (male) | [voir](https://gymvisual.com/illustrations/22274-snow-angel-face-to-floor-male.html) | [voir](https://gymvisual.com/animated-gifs/21919-snow-angel-face-to-floor-male.html) |
+
 ## Avant de déposer quoi que ce soit ici
 
 Ces images ne sont pas libres. Leur licence autorise l'usage en application
