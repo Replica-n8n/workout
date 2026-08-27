@@ -9,15 +9,16 @@ configurer, rien à déclarer.
 Dépose un fichier nommé d'après la clé du mouvement et son niveau :
 
 ```
-images/push_h-3.jpg      pompes complètes
-images/core-2.jpg        hollow hold genoux pliés
-images/pull_s-4.jpg      Y-T-W avec pause
+images/push_h-3.png      pompes complètes
+images/core-2.png        hollow hold genoux pliés
+images/pull_s-4.png      Y-T-W avec pause
 ```
 
-Formats acceptés : `.jpg`. L'app tente de charger l'image, et bascule sur le
+Format : **`.png`**, parce que Gym Visual livre des PNG à fond transparent et
+que le fond sombre de l'app passe alors au travers, sans rectangle blanc. L'app tente de charger l'image, et bascule sur le
 dessin si elle n'existe pas. Aucune liste à tenir à jour.
 
-⚠️ **`push_h-3.jpg` sert de témoin.** Au démarrage, l'app demande ce fichier
+⚠️ **`push_h-3.png` sert de témoin.** Au démarrage, l'app demande ce fichier
 une fois pour savoir si le dossier contient des photos. S'il est absent, elle
 n'en demandera aucune autre et affichera ses schémas, sans remplir la console
 de 404. **Dépose-le en premier**, sinon les autres images resteront invisibles
@@ -27,9 +28,18 @@ C'est le seul fichier qui a un rôle particulier. Une convention unique, plutôt
 qu'une liste des images présentes qui finirait par se désynchroniser du
 dossier.
 
-Taille conseillée : **180 × 180**, ce qui pèse environ 8 Ko par image, soit
-340 Ko pour les 42. Au-delà, on alourdit inutilement une app qui doit tenir
-hors ligne.
+## Quelle taille prendre
+
+Un achat livre **trois résolutions** : 480 × 320, 1024 × 768, et l'originale.
+Prends la **480 × 320** et redimensionne-la si besoin : la fiche l'affiche à
+280 px de large au maximum, et une app hors ligne n'a pas à transporter du
+1024 pixels.
+
+⚠️ Ne pas confondre deux régimes que j'avais mélangés :
+
+- **achat** : tu reçois les trois tailles, aucune limite de résolution ;
+- **permission gratuite** à la manière du dépôt cité plus bas : plafonnée à
+  **180 × 180** et attribution obligatoire.
 
 ## La liste d'achat
 
@@ -37,41 +47,45 @@ Le catalogue de [Gym Visual](https://gymvisual.com/) couvre les 42, avec des
 noms exacts. Il faut **30 illustrations** seulement : les variantes de tempo
 partagent l'image de leur mouvement de base.
 
-À moins de 0,75 $ pièce au-delà de 10 dans le panier, cela représente
-**environ 22 $**.
+**La grille de remise, relevée sur la fiche produit :** 3,00 $ l'unité, et
+**75 % de remise dès 5 articles différents dans le panier**, soit 0,75 $ pièce.
+Pour 30 illustrations : 90 $ moins 75 %, donc **22,50 $**.
+
+Le bandeau du site annonce « less than $0.75 after 10 items ». Le tableau de
+remise de la fiche, lui, donne le seuil réel : **5**.
 
 | Fichier à créer | Notre exercice | ID Gym Visual | Leur nom |
 |---|---|---|---|
-| `push_h-1.jpg` `push_h-2.jpg` | Pompes genoux au sol | **1182** | Push-up (on knees) |
-| `push_h-3.jpg` | Pompes complètes | **0662** | Push-up |
-| `push_h-4.jpg` | Pompes diamant | **0283** | Diamond Push-up |
-| `push_h-5.jpg` | Pompes archer | **3294** | Archer Push up |
-| `push_h-6.jpg` | Pompes pseudo-planche | **3300** | Lean planche |
-| `pull-1.jpg` `pull-2.jpg` | Rowing sous table | **0499** | Inverted Row |
-| `pull-3.jpg` | Rowing pieds surélevés | **2298** | Inverted Row on Bench |
-| `pull-4.jpg` | Rowing une main | **1773** | One Arm Towel Row |
-| `pull-5.jpg` | Traction négative | **7385** | Pull-up (negative) (male) |
-| `pull-6.jpg` | Traction complète | **0652** | Pull-up |
-| `pull_s-1.jpg` `pull_s-5.jpg` | Superman | **0804** | Superman |
-| `pull_s-2.jpg` | Y-T-W, position Y | **6350** | Lying Prone Y Raise |
-| `pull_s-3.jpg` `pull_s-6.jpg` | Reverse snow angel | **10045** | Snow Angel Face to Floor (male) |
-| `pull_s-4.jpg` | Y-T-W, position T | **5041** | Lying Prone T |
-| `push_v-1.jpg` `push_v-2.jpg` `push_v-3.jpg` | Pompes piquées | **2921** | Pike Push up |
-| `push_v-4.jpg` `push_v-5.jpg` `push_v-6.jpg` | Appui mural | **0471** | Handstand Push-Up |
-| `knee-1.jpg` `knee-2.jpg` | Squat | **0787** | Squat |
-| `knee-3.jpg` | Fente marchée | **1460** | Walking Lunge |
-| `knee-4.jpg` | Fente fendue | **0781** | Split Squat |
-| `knee-5.jpg` | Squat une jambe assisté | **3747** | Assisted Pistol Squat with Bed Sheet |
-| `knee-6.jpg` | Pistol complet | **0732** | Single Leg Squat (pistol) |
-| `hip-1.jpg` `hip-2.jpg` | Pont fessier | **0145** | Butt Bridge |
-| `hip-3.jpg` | Pont fessier une jambe | **0726** | Single Leg Bridge |
-| `hip-4.jpg` | Charnière une jambe | **3928** | Bodyweight Single Leg Deadlift |
-| `hip-5.jpg` `hip-6.jpg` | Curl ischio | **7746** | Nordic Hamstring Curl (male) |
-| `core-1.jpg` | Planche | **0463** | Front Plank |
-| `core-2.jpg` `core-3.jpg` | Hollow hold | **1246** | Hollow Hold |
-| `core-4.jpg` | Hollow rock | **5649** | Hollow Rock (male) |
-| `core-5.jpg` | Body saw | **2861** | Saw |
-| `core-6.jpg` | Planche une main | **3983** | One Arm Front Plank |
+| `push_h-1.png` `push_h-2.png` | Pompes genoux au sol | **1182** | Push-up (on knees) |
+| `push_h-3.png` | Pompes complètes | **0662** | Push-up |
+| `push_h-4.png` | Pompes diamant | **0283** | Diamond Push-up |
+| `push_h-5.png` | Pompes archer | **3294** | Archer Push up |
+| `push_h-6.png` | Pompes pseudo-planche | **3300** | Lean planche |
+| `pull-1.png` `pull-2.png` | Rowing sous table | **0499** | Inverted Row |
+| `pull-3.png` | Rowing pieds surélevés | **2298** | Inverted Row on Bench |
+| `pull-4.png` | Rowing une main | **1773** | One Arm Towel Row |
+| `pull-5.png` | Traction négative | **7385** | Pull-up (negative) (male) |
+| `pull-6.png` | Traction complète | **0652** | Pull-up |
+| `pull_s-1.png` `pull_s-5.png` | Superman | **0804** | Superman |
+| `pull_s-2.png` | Y-T-W, position Y | **6350** | Lying Prone Y Raise |
+| `pull_s-3.png` `pull_s-6.png` | Reverse snow angel | **10045** | Snow Angel Face to Floor (male) |
+| `pull_s-4.png` | Y-T-W, position T | **5041** | Lying Prone T |
+| `push_v-1.png` `push_v-2.png` `push_v-3.png` | Pompes piquées | **2921** | Pike Push up |
+| `push_v-4.png` `push_v-5.png` `push_v-6.png` | Appui mural | **0471** | Handstand Push-Up |
+| `knee-1.png` `knee-2.png` | Squat | **0787** | Squat |
+| `knee-3.png` | Fente marchée | **1460** | Walking Lunge |
+| `knee-4.png` | Fente fendue | **0781** | Split Squat |
+| `knee-5.png` | Squat une jambe assisté | **3747** | Assisted Pistol Squat with Bed Sheet |
+| `knee-6.png` | Pistol complet | **0732** | Single Leg Squat (pistol) |
+| `hip-1.png` `hip-2.png` | Pont fessier | **0145** | Butt Bridge |
+| `hip-3.png` | Pont fessier une jambe | **0726** | Single Leg Bridge |
+| `hip-4.png` | Charnière une jambe | **3928** | Bodyweight Single Leg Deadlift |
+| `hip-5.png` `hip-6.png` | Curl ischio | **7746** | Nordic Hamstring Curl (male) |
+| `core-1.png` | Planche | **0463** | Front Plank |
+| `core-2.png` `core-3.png` | Hollow hold | **1246** | Hollow Hold |
+| `core-4.png` | Hollow rock | **5649** | Hollow Rock (male) |
+| `core-5.png` | Body saw | **2861** | Saw |
+| `core-6.png` | Planche une main | **3983** | One Arm Front Plank |
 
 Les 30 identifiants, à copier dans leur recherche :
 

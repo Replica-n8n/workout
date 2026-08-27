@@ -30,7 +30,7 @@ function announce(msg) {
    sur un fichier témoin. Sonder à chaque fiche remplirait la console de 404
    et noierait les vraies erreurs ; tenir une liste des images présentes se
    désynchroniserait du dossier. Un témoin, c'est une seule convention. */
-const TEMOIN = 'push_h-3';
+const TEMOIN = 'push_h-3';   // le fichier qui dit si le dossier est peuplé
 let photosPresentes = false;
 
 (function detecterPhotos() {
@@ -40,7 +40,7 @@ let photosPresentes = false;
     const c = $('#set-credits');
     if (c) c.hidden = false;              // attribution due dès qu'il y a des photos
   });
-  sonde.src = 'images/' + TEMOIN + '.jpg';
+  sonde.src = 'images/' + TEMOIN + '.png';
 })();
 
 /* La figure d'un mouvement dépend de la variante : en version sans rien, le
@@ -76,7 +76,7 @@ function ouvrirFiche(mov, niveau, titre, sousTitre) {
     boite.replaceChildren(img);
     boite.classList.add('avec-photo');
   });
-  img.src = 'images/' + cle + '.jpg';
+  img.src = 'images/' + cle + '.png';
 
   d.showModal();
 }

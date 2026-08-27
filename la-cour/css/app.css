@@ -210,8 +210,9 @@ sup{font-size:.6em;}
   margin:14px 0 12px;padding:10px 6px;border:1px solid var(--line);
   background:var(--bg);color:var(--text);display:flex;justify-content:center;
 }
-/* Une photo remplit le cadre ; un schéma respire. */
-.fiche-dessin.avec-photo{padding:0;background:#fff;}
+/* Les illustrations sont des PNG à fond transparent : le fond sombre de
+   l'app passe au travers, pas de rectangle blanc à découper. */
+.fiche-dessin.avec-photo{padding:6px;}
 .fiche-dessin img{display:block;width:100%;height:auto;max-width:280px;}
 .fiche-note{font-size:.95rem;color:var(--dim);line-height:1.5;padding-bottom:14px;}
 #fiche form{padding:0 20px 20px;}

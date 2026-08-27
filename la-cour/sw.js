@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.5.0';
+const VERSION = '1.5.2';
 const SHELL = 'lacour-shell-' + VERSION;
 const ASSETS = 'lacour-assets-' + VERSION;
 
@@ -65,8 +65,10 @@ self.addEventListener('fetch', e => {
     e.respondWith(
       caches.match(req).then(hit =>
         hit || fetch(req).then(res => {
-          const copy = res.clone();
-          caches.open(ASSETS).then(c => c.put(req, copy)).catch(() => {});
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(ASSETS).then(c => c.put(req, copy)).catch(() => {});
+          }
           return res;
         }).catch(() => hit)
       )
@@ -83,10 +85,16 @@ self.addEventListener('fetch', e => {
     return;
   }
 
+  /* `res.ok` est indispensable : sans lui, un 404 finissait en cache et
+     était resservi indéfiniment. Concrètement, une image ajoutée dans
+     images/ APRÈS un premier chargement restait invisible, le worker
+     répondant par l'échec qu'il avait mémorisé avant qu'elle existe. */
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(SHELL).then(c => c.put(req, copy)).catch(() => {});
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(SHELL).then(c => c.put(req, copy)).catch(() => {});
+      }
       return res;
     }))
   );
