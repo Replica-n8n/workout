@@ -16,9 +16,15 @@
    Le prix, assumé et dit dans les réglages : ça consomme de la batterie, et
    ça prend la place du lecteur média, donc ça coupe la musique.
 
-   `navigator.vibrate` n'apparaît nulle part ici : l'API n'existe pas dans
-   Safari iOS, ni dans une PWA installée. Promettre une vibration serait
-   mentir sur la moitié du parc.
+   Deux contraintes de plateforme dictent tout ce fichier :
+
+   - Chrome sur Android n'affiche la notification média que si la durée du
+     son atteint CINQ SECONDES. Un porteur d'une seconde ne déclenche rien,
+     et l'écran de verrouillage reste vide. D'où les douze secondes.
+   - `navigator.vibrate()` est ignoré quand la page est cachée, donc
+     précisément quand l'écran est verrouillé. La vibration de fin de repos
+     passe par une notification du service worker, qui elle en a le droit.
+     Sur iOS l'API n'existe pas du tout : rien n'est promis.
    ========================================================================= */
 
 let audio = null;         // le porteur silencieux
@@ -27,10 +33,11 @@ let actif = false;
 let urlBlob = null;
 let dernierAffichage = '';   // évite de repousser un affichage identique
 
-/* Un WAV d'une seconde, à amplitude 1 sur 32767. Ce n'est pas du silence
-   absolu : certains systèmes libèrent la session média quand le flux est
-   parfaitement vide. Inaudible, mais présent. */
-function wavPresqueSilencieux(secondes = 1, taux = 8000) {
+/* Douze secondes, pas une : sous cinq, Chrome Android refuse d'ouvrir une
+   session média et l'écran de verrouillage reste vide. Amplitude 1 sur
+   32767, donc inaudible, mais pas un silence absolu : certains systèmes
+   libèrent la session quand le flux est parfaitement vide. */
+function wavPresqueSilencieux(secondes = 12, taux = 8000) {
   const n = secondes * taux;
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
@@ -123,6 +130,44 @@ export function afficher({ titre, sousTitre, detail }) {
   } catch (e) {}
 }
 
+/* Autorisation de notifier, demandée seulement si l'utilisateur la réclame
+   depuis les réglages. Une demande à froid au premier lancement se fait
+   refuser, et le refus est définitif. */
+export async function demanderNotifications() {
+  if (!('Notification' in window)) return 'indisponible';
+  if (Notification.permission === 'granted') return 'accordee';
+  if (Notification.permission === 'denied') return 'refusee';
+  try { return (await Notification.requestPermission()) === 'granted' ? 'accordee' : 'refusee'; }
+  catch (e) { return 'indisponible'; }
+}
+
+export function notificationsPretes() {
+  return 'Notification' in window && Notification.permission === 'granted';
+}
+
+/* L'alerte qui marche écran éteint sur Android. `tag` fait remplacer la
+   précédente au lieu d'en empiler une par série. */
+export async function alerteFinRepos(titre, corps) {
+  if (!notificationsPretes() || !('serviceWorker' in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+    await reg.showNotification(titre, {
+      body: corps,
+      tag: 'lacour-repos',
+      renotify: true,
+      vibrate: [180, 90, 180],
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png'
+    });
+    setTimeout(async () => {
+      const n = await reg.getNotifications({ tag: 'lacour-repos' });
+      n.forEach(x => x.close());
+    }, 12000);
+    return true;
+  } catch (e) { return false; }
+}
+
 /* Bip court. Passe par le même contexte que le porteur silencieux, donc
    reste audible quand l'écran est éteint. */
 export function bip() {
@@ -143,7 +188,7 @@ export function bip() {
       o.stop(t + decalage + 0.16);
     });
   } catch (e) {}
-  /* Sur Android la vibration existe et complète utilement le bip.
-     Sur iPhone l'appel n'existe pas : le `if` suffit, pas de promesse. */
+  /* Ne marche que si la page est visible : écran verrouillé, l'appel est
+     ignoré en silence. C'est la notification qui prend le relais. */
   try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
 }

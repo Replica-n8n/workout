@@ -319,7 +319,13 @@ function unlock(auto) {
              run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions') +
              ', ' + s.title);
   }
-  if (auto) media.bip();
+  if (auto) {
+    media.bip();
+    if (s) {
+      media.alerteFinRepos('Série ' + s.setNo + ' sur ' + s.setsTotal,
+        run.value + (s.unit === 'sec' ? ' secondes' : ' répétitions') + ' · ' + s.title);
+    }
+  }
 }
 
 function adjust(delta) {
@@ -750,6 +756,7 @@ function renderSettings() {
     b.setAttribute('aria-pressed', String(b.dataset.variant === st.variant));
   });
   $('#settings-version').textContent = window.LACOUR_VERSION || '1.0.0';
+  document.dispatchEvent(new CustomEvent('lacour:reglages'));
 }
 
 /* ------------------------------------------------------------------ système */
@@ -807,6 +814,30 @@ function wire() {
       renderSettings();
     });
   });
+
+  const majNotifs = () => {
+    const b = $('#settings-notifs');
+    if (!('Notification' in window)) {
+      b.textContent = 'Non disponible sur cet appareil';
+      b.disabled = true;
+    } else if (Notification.permission === 'granted') {
+      b.textContent = 'Alerte activée';
+      b.disabled = true;
+    } else if (Notification.permission === 'denied') {
+      b.textContent = 'Refusée : à réactiver dans les réglages du navigateur';
+      b.disabled = true;
+    } else {
+      b.textContent = 'Activer l’alerte de fin de repos';
+      b.disabled = false;
+    }
+  };
+  $('#settings-notifs').addEventListener('click', async () => {
+    const r = await media.demanderNotifications();
+    announce(r === 'accordee' ? 'Alerte de fin de repos activée.'
+                              : 'Alerte non activée.');
+    majNotifs();
+  });
+  document.addEventListener('lacour:reglages', majNotifs);
 
   $('#settings-wipe').addEventListener('click', () => {
     if (confirm('Effacer toute la progression et l’historique ? C’est définitif.')) {
