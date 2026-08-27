@@ -166,6 +166,29 @@
       </div>
 
       <div class="set-block">
+        <h3>Le repos sur l’écran verrouillé</h3>
+        <p>
+          Le web n’a pas d’équivalent au chronomètre système qu’utilise
+          l’Horloge d’Android. Toute réécriture de texte fait redessiner le
+          bloc entier, d’où le clignotement à chaque seconde.
+        </p>
+        <div class="opts" id="settings-verrou">
+          <button class="opt" type="button" data-verrou="heure" aria-pressed="true">
+            <strong>Heure de reprise</strong>
+            <span>« Reprise à 18:43:20 », écrit une seule fois. Ne clignote
+            jamais. C’est l’horloge du téléphone, juste au-dessus, qui fait le
+            décompte.</span>
+          </button>
+          <button class="opt" type="button" data-verrou="rebours" aria-pressed="false">
+            <strong>Compte à rebours</strong>
+            <span>« 2:29 » qui défile à la seconde. Le bloc se redessine à
+            chaque fois, et ça saute. C’est le prix, il n’y a pas de
+            contournement.</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="set-block">
         <h3>L’alerte de fin de repos</h3>
         <p>
           Écran verrouillé, une page web n’a pas le droit de faire vibrer le
@@ -221,7 +244,7 @@
 
 </div>
 
-<script>window.LACOUR_VERSION = '1.7.0';</script>
+<script>window.LACOUR_VERSION = '1.8.0';</script>
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

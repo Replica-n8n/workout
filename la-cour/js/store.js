@@ -17,6 +17,7 @@ function blankMovements() {
 function blank() {
   return {
     variant: 'table',                 // 'table' | 'strict'
+    verrou: 'heure',                  // 'heure' | 'rebours' : ce qu'affiche l'écran verrouillé
     movements: blankMovements(),
     croise: { sets: CROISE.minSets, lastDate: null },
     history: []                       // { date, logged[], croise? }
@@ -73,6 +74,14 @@ function daysSince(iso) {
   const then = new Date(y, m - 1, d);
   const now = new Date();
   return Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - then) / 86400000);
+}
+
+/* Ce que montre l'écran verrouillé pendant le repos. 'heure' n'est écrit
+   qu'une fois par repos, donc ne clignote jamais ; 'rebours' défile à la
+   seconde mais fait redessiner le bloc par le système à chaque fois. */
+export function setVerrou(v) {
+  state.verrou = v === 'rebours' ? 'rebours' : 'heure';
+  persist();
 }
 
 export function setVariant(v) {

@@ -289,15 +289,29 @@ function peindreVerrouillage() {
   if (run.phase === 'rest') {
     const reste = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
 
-    /* Deux chemins, et le meilleur gagne. Une notification se met à jour en
-       place et en silence ; le bloc média, lui, se redessine entièrement dès
-       que son titre change. Quand la permission est accordée, le décompte
-       passe donc par la notification et le bloc média reste figé. */
-    if (media.notificationsPretes()) {
-      media.chrono(fmt(reste), 'Puis série ' + s.setNo + ' sur ' + s.setsTotal);
-      media.afficher({ titre: 'Repos', sousTitre: s.title, detail: '' });
+    /* Le web n'a pas d'équivalent à setUsesChronometer : toute réécriture de
+       texte fait redessiner le bloc, que ce soit par le lecteur média ou par
+       une notification. Les deux ont été essayés, les deux clignotent.
+
+       « heure » contourne le problème au lieu de le combattre : on écrit
+       l'heure de reprise UNE fois, et c'est l'horloge du téléphone, affichée
+       juste au-dessus sur l'écran verrouillé, qui fait le décompte. */
+    if (store.get().verrou === 'rebours') {
+      const texte = fmt(reste);
+      if (media.notificationsPretes()) {
+        media.chrono(texte, 'Puis série ' + s.setNo + ' sur ' + s.setsTotal);
+        media.afficher({ titre: 'Repos', sousTitre: s.title, detail: '' });
+      } else {
+        media.afficher({ titre: texte, sousTitre: '', detail: '', vignette: false });
+      }
     } else {
-      media.afficher({ titre: fmt(reste), sousTitre: '', detail: '', vignette: false });
+      const fin = new Date(run.restEndsAt);
+      const p = n => (n < 10 ? '0' : '') + n;
+      const heure = p(fin.getHours()) + ':' + p(fin.getMinutes()) + ':' + p(fin.getSeconds());
+      const titre = 'Reprise à ' + heure;
+      const sous = 'Série ' + s.setNo + ' sur ' + s.setsTotal + ' · ' + run.value + unite;
+      if (media.notificationsPretes()) media.chrono(titre, sous);
+      media.afficher({ titre, sousTitre: sous, detail: s.title });
     }
     media.position(s.rest, s.rest - reste);
   } else {
@@ -798,8 +812,21 @@ function renderProgress() {
 
 function renderSettings() {
   const st = store.get();
+  $$('#settings-verrou .opt').forEach(b => {
+    b.addEventListener('click', () => {
+      store.setVerrou(b.dataset.verrou);
+      announce(b.dataset.verrou === 'rebours'
+        ? 'Compte à rebours activé. Le bloc se redessinera à chaque seconde.'
+        : 'Heure de reprise activée. L’affichage ne bougera plus.');
+      renderSettings();
+    });
+  });
+
   $$('#settings-variant .opt').forEach(b => {
     b.setAttribute('aria-pressed', String(b.dataset.variant === st.variant));
+  });
+  $$('#settings-verrou .opt').forEach(b => {
+    b.setAttribute('aria-pressed', String(b.dataset.verrou === (st.verrou || 'heure')));
   });
   $('#settings-version').textContent = window.LACOUR_VERSION || '1.0.0';
   // l'attribution suit le témoin détecté au démarrage
