@@ -26,6 +26,23 @@ function announce(msg) {
   if (el) el.textContent = msg;
 }
 
+/* Y a-t-il des photos dans images/ ? On le demande UNE fois, au démarrage,
+   sur un fichier témoin. Sonder à chaque fiche remplirait la console de 404
+   et noierait les vraies erreurs ; tenir une liste des images présentes se
+   désynchroniserait du dossier. Un témoin, c'est une seule convention. */
+const TEMOIN = 'push_h-3';
+let photosPresentes = false;
+
+(function detecterPhotos() {
+  const sonde = new Image();
+  sonde.addEventListener('load', () => {
+    photosPresentes = true;
+    const c = $('#set-credits');
+    if (c) c.hidden = false;              // attribution due dès qu'il y a des photos
+  });
+  sonde.src = 'images/' + TEMOIN + '.jpg';
+})();
+
 /* La figure d'un mouvement dépend de la variante : en version sans rien, le
    tirage devient de la chaîne postérieure et n'a rien à voir. */
 function cleFigure(mov, niveau) {
@@ -38,10 +55,29 @@ function cleFigure(mov, niveau) {
 function ouvrirFiche(mov, niveau, titre, sousTitre) {
   const cle = cleFigure(mov, niveau);
   const d = $('#fiche');
+  const boite = $('#fiche-dessin');
   $('#fiche-titre').textContent = titre;
   $('#fiche-sous').textContent = sousTitre;
-  $('#fiche-dessin').innerHTML = figures.figure(cle) || '';
   $('#fiche-note').textContent = figures.note(cle);
+
+  /* Une photo si le fichier existe, le schéma sinon. On tente le chargement
+     plutôt que de tenir une liste des images disponibles : une liste se
+     désynchronise du dossier, `onerror` non. */
+  const schema = figures.figure(cle) || '';
+  boite.innerHTML = schema;
+  boite.classList.remove('avec-photo');
+  if (!photosPresentes) { d.showModal(); return; }
+
+  const img = new Image();
+  img.alt = 'Position : ' + titre;
+  img.decoding = 'async';
+  img.addEventListener('load', () => {
+    if ($('#fiche-titre').textContent !== titre) return;   // fiche déjà changée
+    boite.replaceChildren(img);
+    boite.classList.add('avec-photo');
+  });
+  img.src = 'images/' + cle + '.jpg';
+
   d.showModal();
 }
 
@@ -756,6 +792,8 @@ function renderSettings() {
     b.setAttribute('aria-pressed', String(b.dataset.variant === st.variant));
   });
   $('#settings-version').textContent = window.LACOUR_VERSION || '1.0.0';
+  // l'attribution suit le témoin détecté au démarrage
+  $('#set-credits').hidden = !photosPresentes;
   document.dispatchEvent(new CustomEvent('lacour:reglages'));
 }
 
