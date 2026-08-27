@@ -133,7 +133,7 @@ export function effacerPosition() {
 
 /* Ce qui s'affiche sur l'écran de verrouillage. Le titre porte l'information
    qui change, parce que c'est la ligne la plus lisible du lecteur. */
-export function afficher({ titre, sousTitre, detail }) {
+export function afficher({ titre, sousTitre, detail, vignette = true }) {
   if (!actif || !('mediaSession' in navigator)) return;
   /* Le chrono bat quatre fois par seconde mais n'affiche qu'une valeur par
      seconde. Sans ce filtre on reconstruirait 600 MediaMetadata par repos,
@@ -142,14 +142,17 @@ export function afficher({ titre, sousTitre, detail }) {
   if (cle === dernierAffichage) return;
   dernierAffichage = cle;
   try {
+    /* Pendant le repos on n'envoie QUE le temps, sans vignette : le titre
+       change chaque seconde, et tout ce qui est présent dans le bloc est
+       redessiné à chaque fois. Moins il y a d'éléments, moins ça saute. */
     navigator.mediaSession.metadata = new MediaMetadata({
       title: titre,
       artist: sousTitre || '',
-      album: detail || 'La Cour',
-      artwork: [
+      album: detail || '',
+      artwork: vignette ? [
         { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }
-      ]
+      ] : []
     });
   } catch (e) {}
 }
