@@ -60,7 +60,7 @@ remise de la fiche, lui, donne le seuil réel : **5**.
 | `push_h-3.png` | Pompes complètes | **0662** | Push-up |
 | `push_h-4.png` | Pompes diamant | **0283** | Diamond Push-up |
 | `push_h-5.png` | Pompes archer | **3294** | Archer Push up |
-| `push_h-6.png` | Pompes pseudo-planche | **3300** | Lean planche |
+| `push_h-6.png` | Pompes pseudo-planche | **3824** | Pseudo Planche Push-up |
 | `pull-1.png` `pull-2.png` | Rowing sous table | **0499** | Inverted Row |
 | `pull-3.png` | Rowing pieds surélevés | **2298** | Inverted Row on Bench |
 | `pull-4.png` | Rowing une main | **1773** | One Arm Towel Row |
@@ -75,7 +75,7 @@ remise de la fiche, lui, donne le seuil réel : **5**.
 | `knee-1.png` `knee-2.png` | Squat | **0787** | Squat |
 | `knee-3.png` | Fente marchée | **1460** | Walking Lunge |
 | `knee-4.png` | Fente fendue | **0781** | Split Squat |
-| `knee-5.png` | Squat une jambe assisté | **3747** | Assisted Pistol Squat with Bed Sheet |
+| `knee-5.png` | Squat une jambe, talon effleuré | **3494** | Single Leg Heel Touch Squat |
 | `knee-6.png` | Pistol complet | **0732** | Single Leg Squat (pistol) |
 | `hip-1.png` `hip-2.png` | Pont fessier | **0145** | Butt Bridge |
 | `hip-3.png` | Pont fessier une jambe | **0726** | Single Leg Bridge |
@@ -92,7 +92,7 @@ Les 30 identifiants, à copier dans leur recherche :
 ```
 0145 0283 0463 0471 0499 0652 0662 0726 0732 0781
 0787 0804 1182 1246 1460 1773 2298 2861 2921 3294
-3300 3747 3928 3983 5041 5649 6350 7385 7746 10045
+3494 3824 3928 3983 5041 5649 6350 7385 7746 10045
 ```
 
 ## Les 30 fiches produit, à vérifier avant d'acheter
@@ -122,8 +122,8 @@ La recherche du site attend le paramètre `search_query`, pas `s` :
 | **2861** | Saw | [voir](https://gymvisual.com/illustrations/6249-saw.html) | [voir](https://gymvisual.com/animated-gifs/6365-saw-female.html) |
 | **2921** | Pike Push up | [voir](https://gymvisual.com/illustrations/6408-pike-push-up.html) | [voir](https://gymvisual.com/animated-gifs/6735-pike-push-up.html) |
 | **3294** | Archer Push up | [voir](https://gymvisual.com/illustrations/7397-archer-push-up.html) | [voir](https://gymvisual.com/animated-gifs/7188-archer-push-up.html) |
-| **3300** | Lean planche | [voir](https://gymvisual.com/illustrations/7403-lean-planche.html) | [voir](https://gymvisual.com/animated-gifs/7194-lean-planche.html) |
-| **3747** | Assisted Pistol Squat with Bed Sheet | [voir](https://gymvisual.com/illustrations/8594-assisted-pistol-squat-with-bed-sheet.html) | [voir](https://gymvisual.com/animated-gifs/9945-assisted-pistol-squat-with-bed-sheet.html) |
+| **3824** | Pseudo Planche Push-up | [voir](https://gymvisual.com/illustrations/12889-pseudo-planche-push-up.html) | [voir](https://gymvisual.com/animated-gifs/12967-pseudo-planche-push-up.html) |
+| **3494** | Single Leg Heel Touch Squat | [voir](https://gymvisual.com/illustrations/7739-single-leg-heel-touch-squat.html) | [voir](https://gymvisual.com/animated-gifs/8448-single-leg-heel-touch-squat.html) |
 | **3928** | Bodyweight Single Leg Deadlift | [voir](https://gymvisual.com/illustrations/12895-bodyweight-single-leg-deadlift.html) | [voir](https://gymvisual.com/animated-gifs/12973-bodyweight-single-leg-deadlift.html) |
 | **3983** | One Arm Front Plank | [voir](https://gymvisual.com/illustrations/9259-one-arm-front-plank.html) | [voir](https://gymvisual.com/animated-gifs/10071-one-arm-front-plank.html) |
 | **5041** | Lying Prone T | [voir](https://gymvisual.com/illustrations/13599-lying-prone-t.html) | [voir](https://gymvisual.com/animated-gifs/13651-lying-prone-t.html) |

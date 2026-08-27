@@ -215,10 +215,10 @@ export const POSES = {
     note: 'Pied arrière posé loin derrière, on descend sur place. Rien à surélever.'
   },
   'knee-5': {
-    ligne: [[44,104],[62,84],[92,38],[102,68],[76,90],[90,108]],
-    jambeLibre: [[102,68],[140,72],[168,80]],
-    appuis: [[90,108],[44,106]],
-    note: 'Une seule jambe, une main posée au sol ou sur un appui pour l’équilibre.'
+    ligne: [[40,54],[64,50],[92,38],[102,68],[74,90],[88,108]],
+    jambeLibre: [[102,68],[134,86],[156,106]],
+    appuis: [[88,108],[156,106]],
+    note: 'Descente sur une jambe, le talon libre effleure le sol derrière pour l’équilibre. Il porte le moins de poids possible.'
   },
   'knee-6': {
     ligne: [[54,40],[76,48],[100,30],[108,64],[78,84],[92,108]],

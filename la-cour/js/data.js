@@ -80,7 +80,7 @@ export const MOVEMENTS = {
       r('Squat, 3 s à la descente'),
       r('Fente marchée'),
       r('Fente fendue, pied arrière au sol'),
-      r('Squat une jambe, main au sol'),
+      r('Squat une jambe, talon effleuré'),
       r('Pistol complet')
     ]
   },
