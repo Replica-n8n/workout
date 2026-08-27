@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.6.3';
+const VERSION = '1.7.0';
 const SHELL = 'lacour-shell-' + VERSION;
 const ASSETS = 'lacour-assets-' + VERSION;
 

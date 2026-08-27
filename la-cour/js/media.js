@@ -94,6 +94,7 @@ export async function demarrer(handlers = {}) {
 }
 
 export function arreter() {
+  fermerChrono();
   effacerPosition();
   actif = false;
   dernierAffichage = '';
@@ -170,6 +171,51 @@ export async function demanderNotifications() {
 
 export function notificationsPretes() {
   return 'Notification' in window && Notification.permission === 'granted';
+}
+
+/* Le compte à rebours en notification.
+
+   L'appli Horloge d'Android est fluide parce qu'elle utilise
+   setUsesChronometer : le système anime le champ lui-même, sans que l'app
+   pousse quoi que ce soit. Cette API n'existe pas côté web.
+
+   Le plus proche possible : réécrire une notification portant le MÊME tag.
+   Elle se met alors à jour en place, sans bannière ni son, sur un chemin de
+   rendu différent de celui du bloc média — lequel redessine tout à chaque
+   changement de titre.
+
+   `enCours` évite d'empiler les appels : showNotification est asynchrone et
+   on l'appelle chaque seconde. */
+let enCours = false;
+
+export async function chrono(texte, sousTexte) {
+  if (!notificationsPretes() || !('serviceWorker' in navigator)) return false;
+  if (enCours) return false;
+  enCours = true;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return false;
+    await reg.showNotification(texte, {
+      body: sousTexte || '',
+      tag: 'lacour-chrono',
+      renotify: false,        // pas de re-alerte : mise à jour silencieuse
+      silent: true,
+      requireInteraction: true,
+      icon: 'icons/icon-192.png',
+      badge: 'icons/icon-192.png'
+    });
+    return true;
+  } catch (e) { return false; }
+  finally { enCours = false; }
+}
+
+export async function fermerChrono() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) return;
+    (await reg.getNotifications({ tag: 'lacour-chrono' })).forEach(n => n.close());
+  } catch (e) {}
 }
 
 /* L'alerte qui marche écran éteint sur Android. `tag` fait remplacer la

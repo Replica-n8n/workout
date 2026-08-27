@@ -287,13 +287,21 @@ function peindreVerrouillage() {
   const unite = s.unit === 'sec' ? ' secondes' : ' répétitions';
 
   if (run.phase === 'rest') {
-    /* Le temps, et rien d'autre. Il défile à la seconde, et le bloc est
-       réduit au minimum pour que le système ait le moins possible à
-       redessiner : ni sous-titre, ni album, ni vignette. */
     const reste = Math.max(0, (run.restEndsAt - Date.now()) / 1000);
-    media.afficher({ titre: fmt(reste), sousTitre: '', detail: '', vignette: false });
+
+    /* Deux chemins, et le meilleur gagne. Une notification se met à jour en
+       place et en silence ; le bloc média, lui, se redessine entièrement dès
+       que son titre change. Quand la permission est accordée, le décompte
+       passe donc par la notification et le bloc média reste figé. */
+    if (media.notificationsPretes()) {
+      media.chrono(fmt(reste), 'Puis série ' + s.setNo + ' sur ' + s.setsTotal);
+      media.afficher({ titre: 'Repos', sousTitre: s.title, detail: '' });
+    } else {
+      media.afficher({ titre: fmt(reste), sousTitre: '', detail: '', vignette: false });
+    }
     media.position(s.rest, s.rest - reste);
   } else {
+    media.fermerChrono();
     media.afficher({
       titre: 'Série ' + s.setNo + ' sur ' + s.setsTotal,
       sousTitre: run.value + unite,
