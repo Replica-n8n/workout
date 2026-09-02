@@ -169,10 +169,15 @@ sous le chiffre rappelle le calcul, pour qu'on puisse le contredire.
 
 L'unité est portée par la position dans la séance, pas par le mouvement :
 
-| | Séries | Repos |
-|---|---|---|
-| Mouvements principaux, préfixés `A` | 6 | 1 min 15 |
-| Accessoires, préfixés `B` et `C` | 4 | 1 min |
+| | Séries | Répétitions | Repos |
+|---|---|---|---|
+| Mouvements principaux, préfixés `A` | 6 | 10 | 1 min 15 |
+| Accessoires, préfixés `B` et `C` | 4 | 12 | 1 min |
+
+Les 10 répétitions du principal sont la prescription du German Volume Training,
+celle qui va avec les 60 % du 1RM : sans elles, le pourcentage ne veut rien
+dire. Elles sont affichées sous chaque exercice, parce que la grille de cases
+compte les séries et ne dit rien des répétitions.
 
 ### Ce qui a été corrigé par rapport à la maquette d'origine
 

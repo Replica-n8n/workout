@@ -28,9 +28,11 @@ const SEANCES = {
 };
 
 /* Les mouvements principaux (A) portent le volume et le repos long ;
-   l'accessoire (B, C) est plus court. */
-const PRINCIPAL = { series: 6, repos: 75 };
-const ACCESSOIRE = { series: 4, repos: 60 };
+   l'accessoire (B, C) est plus court. Les 10 répétitions du principal sont
+   LA prescription du German Volume Training, celle qui va avec les 60 % du
+   1RM affichés plus haut : sans elles, le pourcentage ne veut rien dire. */
+const PRINCIPAL = { series: 6, reps: 10, repos: 75 };
+const ACCESSOIRE = { series: 4, reps: 12, repos: 60 };
 
 const reglage = nom => /^A\d/.test(nom) ? PRINCIPAL : ACCESSOIRE;
 
@@ -311,19 +313,23 @@ function montrer(id) {
   elSeance.innerHTML =
     '<h2 class="seance-titre">' + seance.titre + '</h2>' +
     seance.exercices.map((nom, iExo) => {
-      const { series: nb, repos } = reglage(nom);
+      const { series: nb, reps, repos } = reglage(nom);
       const cases = Array.from({ length: nb }, (_, i) => {
         const k = cle(id, iExo, i);
         return '<label class="serie">' +
           '<input type="checkbox" data-cle="' + k + '" data-repos="' + repos + '" data-exo="' + iExo + '"' +
           (series[k] ? ' checked' : '') +
-          ' aria-label="' + nom + ', série ' + (i + 1) + ' sur ' + nb + '">' +
+          ' aria-label="' + nom + ', série ' + (i + 1) + ' sur ' + nb +
+          ', ' + reps + ' répétitions">' +
           '</label>';
       }).join('');
 
       return '<article class="panneau exo" data-exo="' + iExo + '">' +
         '<div class="exo-tete">' +
-          '<h3 class="exo-nom">' + nom + '</h3>' +
+          '<div>' +
+            '<h3 class="exo-nom">' + nom + '</h3>' +
+            '<p class="exo-presc">' + reps + ' répétitions par série</p>' +
+          '</div>' +
           '<span class="exo-compte" data-compte="' + iExo + '"></span>' +
         '</div>' +
         '<div class="jauge"><span data-jauge="' + iExo + '"></span></div>' +
