@@ -249,6 +249,23 @@ body{
 .btn-fantome:active{transform:scale(.96);}
 .btn-fantome:hover{color:var(--text);}
 .btn-vider{display:block;width:100%;margin:6px 0 0;}
+
+.installer{
+  display:block;width:100%;min-height:48px;margin:0 0 18px;
+  background:rgba(56,189,248,.12);
+  border:1px dashed rgba(56,189,248,.55);border-radius:14px;
+  color:var(--accent);font-family:var(--ff);
+  font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  cursor:pointer;transition:transform .1s ease;
+}
+.installer:active{transform:scale(.98);}
+
+.installer-ios{
+  margin:0 0 18px;padding:12px 14px;
+  border:1px dashed rgba(56,189,248,.4);border-radius:14px;
+  font-size:.82rem;color:var(--dim);text-align:center;
+}
+.installer-ios strong{color:var(--accent);}
 .btn-vider.arme{color:var(--warn);border-color:rgba(251,191,36,.5);}
 
 /* `display` déclaré dans une classe bat la règle `[hidden]{display:none}` du

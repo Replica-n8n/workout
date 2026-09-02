@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et le module.
    ========================================================================= */
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const SHELL = 'gvt-shell-' + VERSION;
 
 const FILES = [

@@ -403,6 +403,49 @@ addEventListener('scroll', () => {
 
 montrer(courante);
 
+/* ---------------------------------------------------------- installation */
+
+/* Sans ce bouton, l'app était installable sans jamais le proposer : Chrome
+   ne montre plus de bandeau de lui-même, il se contente de prévenir la page
+   par `beforeinstallprompt`, et une page qui ignore cet événement paraît
+   ne pas être une app. C'était le cas ici. */
+let evenementInstall = null;
+const elInstall = $('#install');
+
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  evenementInstall = e;
+  elInstall.hidden = false;
+});
+
+/* L'écoute du clic est posée UNE fois, hors de l'événement : l'attacher à
+   l'intérieur empilerait un écouteur de plus à chaque `beforeinstallprompt`,
+   et le même appui déclencherait alors plusieurs invites. */
+elInstall.addEventListener('click', async () => {
+  const invite = evenementInstall;
+  if (!invite) return;
+  /* L'événement ne sert qu'une fois, refusé ou accepté. On le jette donc
+     tout de suite ; si le navigateur en renvoie un autre plus tard, le
+     bouton revient de lui-même. */
+  evenementInstall = null;
+  elInstall.hidden = true;
+  try { await invite.prompt(); } catch {}
+});
+
+addEventListener('appinstalled', () => {
+  evenementInstall = null;
+  elInstall.hidden = true;
+});
+
+/* Safari sur iPhone ne déclenche jamais `beforeinstallprompt` : la seule
+   voie est Partager puis « Sur l'écran d'accueil ». Sans ce rappel, l'app
+   a l'air non installable sur iPhone alors qu'elle l'est. */
+const surIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const dejaInstallee = matchMedia('(display-mode: standalone)').matches ||
+  navigator.standalone === true;
+if (surIOS && !dejaInstallee) $('#install-ios').hidden = false;
+
 /* ------------------------------------------------------- service worker */
 
 if ('serviceWorker' in navigator) {
