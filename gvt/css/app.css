@@ -24,7 +24,15 @@
 
 *{box-sizing:border-box;}
 
-html{-webkit-text-size-adjust:100%;}
+html{
+  -webkit-text-size-adjust:100%;
+  /* L'en-tête collant fait 76 px replié. Sans cette réserve, un navigateur
+     qui amène un élément au focus « en haut de la fenêtre » le glisse SOUS
+     l'en-tête (WCAG 2.2 AA, Focus Not Obscured). Mesuré : Chrome tient déjà
+     compte du collant et ne masque aucune case, dans les deux sens de
+     tabulation. La réserve couvre les navigateurs qui ne le font pas. */
+  scroll-padding-top:84px;
+}
 
 body{
   margin:0;
@@ -182,9 +190,19 @@ body{
 }
 
 /* Un exercice fini s'efface sans disparaître : il descend en bas de la liste
-   et reste consultable, mais ne dispute plus l'attention à celui qui reste. */
-.exo.fini{opacity:.5;}
+   et reste consultable, mais ne dispute plus l'attention à celui qui reste.
+
+   ⚠️ L'atténuation ne passe PAS par une `opacity` sur toute la carte. Une
+   opacité de 0,5 faisait tomber la prescription et le compteur à 2,88:1,
+   sous le seuil de 4,5. Le texte est donc atténué par sa COULEUR, qui reste
+   mesurable, et l'opacité ne s'applique qu'au graphique, où aucun seuil de
+   contraste ne s'applique et où l'information est portée ailleurs (le
+   compteur dit déjà « 6 / 6 séries »). */
+.exo.fini .exo-nom{color:var(--dim);}
+.exo.fini .exo-presc{color:var(--dim);}
 .exo.fini .exo-compte{color:var(--accent);}
+.exo.fini .series,
+.exo.fini .jauge{opacity:.45;}
 
 .exo-tete{
   display:flex;justify-content:space-between;align-items:baseline;

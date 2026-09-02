@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et le module.
    ========================================================================= */
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 const SHELL = 'gvt-shell-' + VERSION;
 
 const FILES = [
@@ -59,10 +59,18 @@ self.addEventListener('fetch', e => {
   }
 
   /* `res.ok` est indispensable : sans lui, un 404 finit en cache et est
-     resservi indéfiniment, y compris pour un fichier ajouté plus tard. */
+     resservi indéfiniment, y compris pour un fichier ajouté plus tard.
+
+     La chaîne de requête est écartée du cache : l'app ne demande jamais rien
+     avec un `?`, mais les outils de contrôle importent `audit.js?t=<horodatage>`
+     à chaque passage, et chaque import laissait une entrée de plus dans un
+     cache que rien ne purge avant le changement de VERSION. Mesuré sur une
+     session : 10 entrées pour 9 fichiers de coquille. */
+  const jetable = new URL(req.url).search !== '';
+
   e.respondWith(
     caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok) {
+      if (res.ok && !jetable) {
         const copie = res.clone();
         caches.open(SHELL).then(c => c.put(req, copie)).catch(() => {});
       }

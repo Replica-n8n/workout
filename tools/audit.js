@@ -63,6 +63,21 @@ function lire(couleur) {
   };
 }
 
+/* `opacity` sur un ancêtre fond le texte dans le fond SANS toucher à sa
+   couleur calculée : `getComputedStyle(el).color` renvoie la même valeur que
+   le bloc soit à 1 ou à 0,05. Sans ce produit, un exercice terminé rendu par
+   `opacity:.5` passait pour parfaitement contrasté alors que deux de ses
+   trois textes tombaient à 3,01:1. */
+function opaciteHeritee(el) {
+  let o = 1, n = el;
+  while (n && n !== document.documentElement) {
+    const v = parseFloat(getComputedStyle(n).opacity);
+    o *= isNaN(v) ? 1 : v;
+    n = n.parentElement;
+  }
+  return o;
+}
+
 function fondEffectif(el) {
   /* Remonte les ancêtres jusqu'à trouver un fond opaque. Un fond
      semi-transparent est composé sur celui du dessous, sinon les cartes
@@ -213,7 +228,21 @@ function reglesEcran(nom, out, opts = {}) {
     const s = getComputedStyle(el);
     const av = lire(s.color);
     if (!av || av.a === 0) return;
-    const ratio = contraste(av, fondEffectif(el));
+
+    /* La couleur du texte est composée sur son fond avec son alpha TOTAL :
+       celui de la couleur elle-même, multiplié par l'opacité héritée. Les
+       deux étaient ignorés, et un texte à moitié transparent ressortait
+       aussi contrasté qu'un texte plein. */
+    const fond = fondEffectif(el);
+    const alpha = av.a * opaciteHeritee(el);
+    if (alpha <= 0) return;
+    const compose = {
+      r: av.r * alpha + fond.r * (1 - alpha),
+      g: av.g * alpha + fond.g * (1 - alpha),
+      b: av.b * alpha + fond.b * (1 - alpha),
+      a: 1
+    };
+    const ratio = contraste(compose, fond);
     const min = seuil(s);
     const cle = reperer(el);
     if (ratio < min && !vus.has(cle)) {
