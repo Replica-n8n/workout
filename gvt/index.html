@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GVT Tracker</title>
+<meta name="description" content="Suivi de séances German Volume Training : charge à 60 % du 1RM, séries cochées une à une, repos chronométré. Fonctionne hors ligne.">
+<meta name="theme-color" content="#0f172a">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GVT">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<p class="sr-only" id="annonce" role="status" aria-atomic="true"></p>
+
+<div class="topbar" id="update-bar" hidden>
+  <span>Une nouvelle version est prête.</span>
+  <button type="button" id="update-btn">Recharger</button>
+</div>
+
+<header class="entete" id="entete">
+  <p class="marque">GVT <em>Tracker</em></p>
+  <div class="panneau chrono-bloc">
+    <div class="chrono" id="chrono">00:00</div>
+    <p class="chrono-etat" id="chrono-etat">Repos</p>
+    <button class="btn-fantome" type="button" id="chrono-reset">Réinitialiser</button>
+  </div>
+</header>
+
+<main class="corps">
+
+  <section class="panneau charge">
+    <div class="charge-tete">
+      <h2 class="lab">Charge · 60 % du 1RM</h2>
+      <label class="sr-only" for="rm">Ton 1RM en livres</label>
+      <input class="champ" type="number" id="rm" inputmode="numeric" min="0" max="1500" step="5" placeholder="1RM (lb)">
+    </div>
+    <div class="charge-cible" id="charge-cible">-- lb</div>
+    <p class="charge-detail" id="charge-detail">Entre ton 1RM pour obtenir la charge.</p>
+  </section>
+
+  <nav class="onglets" id="onglets" aria-label="Séances"></nav>
+
+  <section id="seance"></section>
+
+  <button class="btn-fantome btn-vider" type="button" id="vider">Vider les séries de cette séance</button>
+
+  <p class="avert">
+    Programme à titre informatif. Il ne remplace pas l'avis d'un médecin ou
+    d'un kinésithérapeute.
+  </p>
+
+</main>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

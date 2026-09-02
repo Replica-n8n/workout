@@ -6,6 +6,7 @@ aucun outil de build. Chaque app est une PWA autonome qui fonctionne hors ligne.
 | Dossier | App | Quoi |
 |---|---|---|
 | [`la-cour/`](la-cour/) | **La Cour** | Calisthénie au poids de corps, dérivée de l'entraînement des prisons mexicaines et corrigée selon la littérature actuelle sur l'hypertrophie. |
+| [`gvt/`](gvt/) | **GVT Tracker** | German Volume Training : charge à 60 % du 1RM, séries cochées une à une, repos chronométré. |
 
 ## Ajouter une app
 
@@ -146,6 +147,75 @@ python -m http.server 8080
 ```
 
 Puis ouvrir `http://localhost:8080/la-cour/`.
+
+---
+
+## GVT Tracker
+
+### Le principe
+
+Une seule page. Trois séances au choix, la charge de travail en haut, et une
+case par série. On coche, le repos part tout seul, la barre de progression de
+l'exercice avance. Rien d'autre à faire pendant la séance.
+
+### La charge
+
+Le German Volume Training travaille à **60 % du 1RM**. Le 1RM se saisit une
+fois, il est gardé, et la charge affichée est arrondie au multiple de 5 lb,
+parce que c'est le plus petit saut réellement montable sur une barre. Le détail
+sous le chiffre rappelle le calcul, pour qu'on puisse le contredire.
+
+### Le volume
+
+L'unité est portée par la position dans la séance, pas par le mouvement :
+
+| | Séries | Repos |
+|---|---|---|
+| Mouvements principaux, préfixés `A` | 6 | 1 min 15 |
+| Accessoires, préfixés `B` et `C` | 4 | 1 min |
+
+### Ce qui a été corrigé par rapport à la maquette d'origine
+
+| | Maquette | Ici |
+|---|---|---|
+| Mise en forme | Tailwind depuis un CDN | CSS écrit dans le dépôt |
+| Charge à 60 % | Champ présent, aucun calcul derrière | Calculée, arrondie, gardée |
+| Repos | `setInterval` qui décrémente | Échéance en timestamp absolu |
+| Fin du repos | Vibration seule | Vibration, bip WebAudio, annonce |
+| Séries cochées | Gardées pour toujours | Vidables par séance, en deux temps |
+| Cases | 40 px | 45 px, la règle native |
+
+Le CDN est le point important : hors ligne, la maquette s'affichait **sans
+aucune mise en forme**, puisque ses couleurs et sa grille arrivaient par le
+réseau. Une app de salle de sport ne peut pas dépendre de ça.
+
+Le chrono est le deuxième : un `setInterval` est gelé dès que l'écran s'éteint.
+L'échéance est donc stockée en date absolue, et un repos interrompu par un
+verrouillage, un changement d'app ou un rechargement reprend au bon endroit.
+
+### Structure des fichiers
+
+```
+gvt/
+  index.html            la page, en HTML statique
+  css/app.css           thème sombre, aucune dépendance
+  js/app.js             catalogue, chrono, rendu, stockage
+  manifest.webmanifest
+  sw.js                 cache hors ligne
+  icons/                générées, voir tools/mkicons-gvt.py
+```
+
+### Cache et versions
+
+Même règle que La Cour : **la constante `VERSION` en haut de `sw.js` est le
+seul endroit à changer** pour livrer.
+
+### Ce que l'app ne fait pas
+
+Elle ne garde ni historique, ni charge par exercice, ni progression d'une
+séance à l'autre. Elle coche des séries et compte un repos. Le 1RM saisi vaut
+pour toute la séance, ce qui suppose que les mouvements d'une même séance se
+chargent pareil : c'est faux dès qu'on compare un squat et des mollets.
 
 ---
 

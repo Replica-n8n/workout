@@ -127,6 +127,16 @@ function nomAccessible(el) {
     const cible = document.getElementById(par);
     if (cible && cible.textContent.trim()) return cible.textContent.trim();
   }
+  /* `<label for>` et le label englobant nomment un champ aussi sûrement
+     qu'un aria-label. Sans cette branche, tout champ correctement étiqueté
+     était signalé « sans nom », et un vrai manque se serait perdu au milieu
+     de ces fausses alertes. `el.labels` couvre les deux formes. */
+  const etiquettes = el.labels ? Array.from(el.labels) : [];
+  for (const lab of etiquettes) {
+    const t = (lab.textContent || '').trim();
+    if (t) return t;
+  }
+
   const texte = (el.textContent || '').trim();
   if (texte) return texte;
   const titre = el.getAttribute('title');
@@ -146,7 +156,7 @@ function reperer(el) {
 
 /* ------------------------------------------------------------- les règles */
 
-function reglesEcran(nom, out) {
+function reglesEcran(nom, out, opts = {}) {
   const ajoute = (regle, gravite, cible, detail, mesure) =>
     out.push({ ecran: nom, regle, gravite, cible, detail, mesure });
 
@@ -232,8 +242,14 @@ function reglesEcran(nom, out) {
   }
 
   /* 6. La page elle-même ne doit jamais défiler : c'est la zone de contenu
-        qui défile, sinon le pied de page part sous la ligne de flottaison. */
-  if (document.documentElement.scrollHeight > window.innerHeight + 1) {
+        qui défile, sinon le pied de page part sous la ligne de flottaison.
+
+        `pageDefile: true` lève la règle pour une app qui est une liste, et
+        non une suite d'écrans tenant chacun dans la fenêtre. Sans cette
+        sortie, l'audit de GVT signalait à chaque passage un défilement qui
+        est le fonctionnement voulu : un filet qui crie toujours au même
+        endroit finit par ne plus être lu. */
+  if (!opts.pageDefile && document.documentElement.scrollHeight > window.innerHeight + 1) {
     ajoute('page-defile', 'haute', 'document',
            'la page défile au lieu de la zone de contenu',
            `${document.documentElement.scrollHeight} px pour ${window.innerHeight} px`);
@@ -355,6 +371,30 @@ export const PLAN_LA_COUR = [
   { nom: 'séance, repos', attendu: 'screen-run', aller: () => document.querySelector('#run-action').click() }
 ];
 
+/* GVT n'a pas de sections `.screen` : c'est une page unique, et le fond de
+   mesure est donc `document.body`. Les trois étapes ne changent pas d'écran,
+   elles changent d'ÉTAT : repos au repos, repos en cours, en-tête replié par
+   le défilement. Aucune n'a d'`attendu`, faute d'écran à nommer.
+
+   À lancer avec `pageDefile: true`, voir la règle 6 :
+       await a.audit({ ecrans: a.PLAN_GVT, pageDefile: true, format: 'texte' });  */
+export const PLAN_GVT = [
+  { nom: 'séance', aller: async () => {
+      document.querySelectorAll('#seance input:checked').forEach(b => b.click());
+      document.querySelector('#chrono-reset').click();
+      scrollTo(0, 0);
+      await attendre(250);
+    } },
+  { nom: 'séance, repos en cours', aller: async () => {
+      document.querySelector('#seance input[type=checkbox]').click();
+      await attendre(150);
+    } },
+  { nom: 'séance, en-tête replié', aller: async () => {
+      scrollTo(0, 400);
+      await attendre(250);
+    } }
+];
+
 export async function audit(options = {}) {
   const auto = !options.ecrans;
   const plan = options.ecrans || parcoursParDefaut();
@@ -386,7 +426,7 @@ export async function audit(options = {}) {
                  mesure: `${id} au lieu de ${etape.attendu}` });
     }
     visites.push(nom);
-    reglesEcran(nom, out);
+    reglesEcran(nom, out, options);
   }
 
   const parGravite = { haute: 0, moyenne: 0, basse: 0 };

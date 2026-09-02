@@ -1,0 +1,275 @@
+/* =========================================================================
+   GVT Tracker · feuille unique
+
+   La maquette d'origine chargeait Tailwind depuis un CDN. Une PWA qui doit
+   fonctionner dans une salle sans réseau ne peut pas dépendre d'un script
+   distant pour AVOIR SES COULEURS : hors ligne, la page s'affichait nue.
+   Tout est donc écrit ici, sans dépendance et sans build.
+   ========================================================================= */
+
+:root{
+  --bg:#0f172a;
+  --surface:rgba(30,41,59,.72);
+  --surface-plein:#1e293b;
+  --creux:#0b1220;
+  --line:rgba(148,163,184,.18);
+  --text:#f8fafc;
+  --dim:#94a3b8;
+  --accent:#38bdf8;
+  --warn:#fbbf24;
+  --ff:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --ff-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --pad:16px;
+}
+
+*{box-sizing:border-box;}
+
+html{-webkit-text-size-adjust:100%;}
+
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--ff);
+  line-height:1.5;
+  /* `manipulation` supprime le délai de 300 ms au tap sans interdire le
+     zoom : `user-scalable=no` bloquerait l'agrandissement, et ce n'est pas
+     à nous de le décider. */
+  touch-action:manipulation;
+  padding:0 var(--pad) calc(48px + env(safe-area-inset-bottom));
+}
+
+.sr-only{
+  position:absolute;width:1px;height:1px;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;
+}
+
+.lab{
+  margin:0;font-size:.66rem;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);
+}
+
+.panneau{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:20px;
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+}
+
+/* ------------------------------------------------------------- en-tête */
+
+.entete{
+  position:sticky;top:0;z-index:50;
+  max-width:448px;margin:0 auto 22px;
+  padding-top:calc(14px + env(safe-area-inset-top));
+  transition:padding .2s ease;
+}
+
+.marque{
+  margin:0 0 12px;text-align:center;
+  font-size:1.35rem;font-weight:800;letter-spacing:-.02em;
+  text-transform:uppercase;font-style:italic;
+}
+.marque em{font-style:italic;color:var(--accent);}
+
+.chrono-bloc{
+  display:flex;flex-direction:column;align-items:center;
+  padding:14px 16px 16px;
+}
+
+.chrono{
+  font-family:var(--ff-mono);
+  font-size:3.6rem;line-height:1.05;font-weight:800;
+  font-variant-numeric:tabular-nums;
+  color:#e2e8f0;
+  transition:color .2s ease;
+}
+.chrono.actif{color:var(--warn);text-shadow:0 0 18px rgba(251,191,36,.45);}
+.chrono.fini{color:var(--accent);}
+
+.chrono-etat{
+  margin:2px 0 10px;
+  font-size:.66rem;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--dim);min-height:1em;
+}
+
+/* En-tête compact : sous le défilement, le titre s'efface et le chrono
+   passe sur une ligne, pour que la grille de séries reste visible.
+
+   Le fond opaque est porté par l'en-tête lui-même, pas par le bloc du
+   chrono : sinon le texte de la section suivante défilait dans la marge
+   haute restée transparente, au-dessus du chrono. */
+.entete.compact{
+  padding:6px 0 8px;
+  padding-top:calc(6px + env(safe-area-inset-top));
+  background:rgba(15,23,42,.97);
+  box-shadow:0 8px 22px rgba(15,23,42,.85);
+}
+.entete.compact .marque{display:none;}
+.entete.compact .chrono-bloc{
+  flex-direction:row;justify-content:space-between;align-items:center;
+  gap:12px;padding:8px 12px;
+  background:rgba(15,23,42,.94);
+}
+.entete.compact .chrono{font-size:2.1rem;}
+.entete.compact .chrono-etat{display:none;}
+
+/* --------------------------------------------------------------- corps */
+
+.corps{max-width:448px;margin:0 auto;}
+
+.charge{padding:14px 16px 16px;margin-bottom:22px;}
+
+.charge-tete{
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;margin-bottom:12px;
+}
+
+.champ{
+  width:112px;min-height:44px;
+  background:var(--creux);color:var(--text);
+  border:1px solid #334155;border-radius:12px;
+  padding:6px 10px;text-align:center;
+  font-family:var(--ff);font-size:1rem;font-weight:700;
+  -moz-appearance:textfield;
+}
+.champ:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2);}
+.champ::placeholder{font-weight:500;color:var(--dim);}
+/* Les flèches natives volent la moitié d'un champ déjà étroit. */
+.champ::-webkit-outer-spin-button,
+.champ::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+
+.charge-cible{
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(56,189,248,.1);
+  border:1px solid rgba(56,189,248,.3);
+  border-radius:14px;padding:12px;
+  color:var(--accent);
+  font-size:1.85rem;font-weight:800;
+  font-variant-numeric:tabular-nums;
+}
+
+.charge-detail{margin:8px 0 0;font-size:.78rem;color:var(--dim);text-align:center;}
+
+/* ------------------------------------------------------------- onglets */
+
+.onglets{display:flex;gap:8px;margin-bottom:22px;}
+
+.onglet{
+  flex:1 1 0;min-height:48px;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  color:var(--text);font-family:var(--ff);font-size:.92rem;font-weight:700;
+  cursor:pointer;transition:transform .1s ease,border-color .15s ease;
+}
+.onglet:active{transform:scale(.96);}
+.onglet[aria-pressed="true"]{
+  border-color:var(--accent);
+  background:rgba(56,189,248,.14);
+  color:var(--accent);
+}
+
+/* ----------------------------------------------------------- exercices */
+
+.seance-titre{
+  margin:0 0 14px;font-size:.72rem;font-weight:700;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--accent);
+}
+
+.exo{padding:14px 16px 16px;margin-bottom:14px;}
+
+.exo-tete{
+  display:flex;justify-content:space-between;align-items:baseline;
+  gap:12px;margin-bottom:10px;
+}
+.exo-nom{margin:0;font-size:.95rem;font-weight:700;}
+.exo-compte{
+  font-size:.66rem;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--dim);white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+
+.jauge{
+  height:6px;background:var(--creux);border-radius:999px;
+  overflow:hidden;margin-bottom:14px;
+}
+.jauge span{
+  display:block;height:100%;width:0;
+  background:var(--accent);border-radius:999px;
+  transition:width .35s ease;
+}
+
+.series{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+
+/* La cible tactile est portée par le label, pas par la case : 48 px de
+   côté, la règle native, et non le minimum web de 24 px. */
+.serie{
+  position:relative;display:block;aspect-ratio:1;min-height:44px;
+  cursor:pointer;
+}
+.serie input{
+  position:absolute;inset:0;width:100%;height:100%;margin:0;
+  appearance:none;-webkit-appearance:none;
+  background:var(--surface-plein);
+  border:2px solid #334155;border-radius:12px;
+  cursor:pointer;transition:background .15s ease,border-color .15s ease;
+}
+.serie input:checked{
+  background:var(--accent);border-color:var(--accent);
+  box-shadow:0 0 12px rgba(56,189,248,.45);
+}
+.serie input:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.serie::after{
+  content:"";position:absolute;left:50%;top:46%;
+  width:26%;height:48%;
+  border:solid #0f172a;border-width:0 3px 3px 0;
+  transform:translate(-50%,-50%) rotate(45deg) scale(.4);
+  opacity:0;transition:opacity .12s ease,transform .12s ease;
+  pointer-events:none;
+}
+.serie:has(input:checked)::after{
+  opacity:1;transform:translate(-50%,-50%) rotate(45deg) scale(1);
+}
+
+/* Repli sans :has(). Le remplissage suffit à lire l'état coché ; la coche
+   dessinée est un plus, pas le seul signal. */
+@supports not selector(:has(*)){
+  .serie::after{display:none;}
+}
+
+/* ------------------------------------------------------------- divers */
+
+.btn-fantome{
+  min-height:44px;padding:8px 22px;
+  background:rgba(51,65,85,.55);border:1px solid var(--line);border-radius:999px;
+  color:var(--dim);font-family:var(--ff);
+  font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  cursor:pointer;transition:transform .1s ease,color .15s ease;
+}
+.btn-fantome:active{transform:scale(.96);}
+.btn-fantome:hover{color:var(--text);}
+.btn-vider{display:block;width:100%;margin:6px 0 0;}
+.btn-vider.arme{color:var(--warn);border-color:rgba(251,191,36,.5);}
+
+/* `display` déclaré dans une classe bat la règle `[hidden]{display:none}` du
+   navigateur, qui a la même spécificité et passe avant. Sans cette ligne, la
+   barre de mise à jour restait affichée en permanence, y compris au tout
+   premier lancement. */
+[hidden]{display:none !important;}
+
+.topbar{
+  position:fixed;left:0;right:0;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:center;gap:14px;
+  padding:10px 16px;background:var(--accent);color:#0b1220;
+  font-size:.85rem;font-weight:700;
+}
+.topbar button{
+  min-height:36px;padding:4px 14px;border:0;border-radius:999px;
+  background:#0b1220;color:var(--text);font-weight:700;cursor:pointer;
+}
+
+.avert{margin:26px 0 0;font-size:.75rem;color:var(--dim);text-align:center;}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important;animation-duration:.01ms !important;}
+}
