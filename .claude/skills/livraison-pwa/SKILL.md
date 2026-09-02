@@ -8,9 +8,9 @@ description: >
   tester dans le navigateur, préparer un commit, pousser sur GitHub, ou se
   demander pourquoi une modification n'apparaît pas. Il contient trois choses
   qu'on redécouvre douloureusement sinon : le service worker sert du code
-  périmé tant qu'on ne le purge pas, les captures d'écran ne fonctionnent pas
-  sur cette machine, et la revue de code attrape des bugs que les
-  vérifications maison laissent passer.
+  périmé tant qu'on ne le purge pas, le panneau navigateur capture mais ne
+  clique pas, et la revue de code attrape des bugs que les vérifications
+  maison laissent passer.
 ---
 
 # Livraison des PWA du dépôt workout
@@ -43,14 +43,36 @@ alignée est cosmétique, l'oublier n'a aucune conséquence sur le cache.
 Oublier de bumper `VERSION` est le seul moyen de pousser une correction que
 personne ne recevra jamais.
 
-## Vérifier sans captures d'écran
+## Le panneau navigateur : ce qu'il fait, ce qu'il ne fait pas
 
-Le panneau navigateur de cette machine **ne capture pas** : `computer` avec
-`screenshot` échoue systématiquement. Ce n'est pas un incident, c'est l'état
-de l'installation. Ne perds pas de temps à réessayer.
+✅ **Il capture.** `computer` avec `screenshot` rend de vrais PNG, en local
+comme sur `replica-n8n.github.io`. Une version antérieure de ce fichier
+affirmait le contraire (« Browser pane is not displayed », août 2026) ;
+c'était vrai à l'époque, ça ne l'est plus, et s'y fier fait travailler à
+l'aveugle pour rien.
 
-La vérification passe donc par `javascript_tool` et par des mesures. C'est
-d'ailleurs plus fiable qu'un coup d'œil : on obtient des nombres.
+Et la capture n'est pas décorative. C'est elle qui a montré la barre « nouvelle
+version prête » affichée en permanence sur GVT, alors que le DOM répondait
+`hidden === true`. Les deux disaient vrai : `.topbar{display:flex}` bat la
+règle `[hidden]{display:none}` du navigateur, à spécificité égale et déclarée
+après. Aucune mesure JavaScript n'aurait levé ce lièvre, puisque la propriété
+interrogée répondait juste.
+
+⚠️ **En revanche il ne clique pas.** Le panneau se remet en « hidden » entre
+deux appels d'outil, et `computer` en clic ou en frappe expire alors au bout
+de 30 secondes. `tabs_select` ne le remet au premier plan que pour un tour.
+Piloter par `javascript_tool` (`el.click()`), et garder `screenshot` pour
+regarder.
+
+⚠️ **`document.visibilityState` vaut « hidden » pendant toute
+l'automatisation.** Tout code gardé par `visibilityState === 'visible'` (bip
+de fin de repos, vibration, annonce vocale) ne s'exécute donc PAS sous l'outil,
+et son silence ne prouve aucun bug. Vérifier ces chemins autrement, par un
+appel non gardé, ou sur le téléphone.
+
+⚠️ **Les `setTimeout` sont fortement ralentis** quand le panneau est caché :
+deux audits enchaînés dans le même appel ont expiré à 45 secondes. Lancer les
+vérifications une par une.
 
 Démarrer le serveur : `preview_start` avec `{name: "workout"}` (défini dans
 `.claude/launch.json` du dépôt parent), puis naviguer vers
@@ -65,6 +87,7 @@ mesure des rectangles réels :
 ```js
 const a = await import('../tools/audit.js?t=' + Date.now());
 await a.audit({ ecrans: a.PLAN_LA_COUR, format: 'texte' });
+await a.audit({ ecrans: a.PLAN_GVT, pageDefile: true, format: 'texte' });
 ```
 
 ⚠️ Le chemin est **relatif**, et il faut y tenir. En production, Pages sert le
@@ -88,11 +111,37 @@ sinon seuls les écrans atteignables automatiquement sont audités. Chaque étap
 porte un `attendu` : si la navigation dérive, l'audit le signale au lieu de
 mesurer silencieusement le mauvais écran.
 
+⚠️ **Sans plan et sans sections `.screen`, l'audit ne visite AUCUN écran** et
+rend un « rien à signaler » qui n'a rien mesuré. C'est exactement ce qui est
+arrivé sur GVT, qui est une page unique : le parcours par défaut cherche des
+`.screen`, n'en trouve aucune, et la boucle ne tourne pas. Un zéro obtenu sans
+plan ne vaut rien.
+
+`PLAN_GVT` est le modèle pour une app d'un seul écran : ses trois étapes ne
+changent pas d'écran mais d'ÉTAT (au repos, repos en cours, en-tête replié) et
+n'ont pas d'`attendu`, faute d'écran à nommer.
+
+L'option `pageDefile: true` lève la règle 6 pour une app qui est une **liste**
+et non une suite d'écrans tenant chacun dans la fenêtre. Sans elle, l'audit
+signale à chaque passage un défilement qui est le fonctionnement voulu, et un
+filet qui crie toujours au même endroit finit par ne plus être lu.
+
+`nomAccessible` comprend `<label for>` et le label englobant depuis
+septembre 2026. Avant, tout champ correctement étiqueté ressortait « sans nom
+accessible », et un vrai manque se serait perdu au milieu de ces fausses
+alertes.
+
 ⚠️ Ce script est un filet, pas une garantie. Il ne juge ni la clarté des
 libellés, ni la logique d'un parcours, ni ce que la revue de code attrape.
 Vérifie qu'il détecte encore quelque chose de temps en temps, en injectant un
 défaut volontaire : un audit qui renvoie toujours zéro peut être un audit
 cassé.
+
+⚠️ Le défaut injecté doit **réellement** changer une mesure. Sur GVT, un
+premier essai posait `min-height:20px` sur les cases, sans effet : leur taille
+venait d'`aspect-ratio`, et l'audit muet donnait l'impression d'être cassé
+alors que c'était le test qui l'était. Le second essai
+(`position:static;width:20px;height:20px` sur l'`input`) a sorti 60 constats.
 
 ## Ce qu'il faut mesurer
 
