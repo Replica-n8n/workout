@@ -215,13 +215,32 @@ la revue a trouvé deux bugs de navigation réels dans un diff écrit dix minute
 plus tôt, que les vérifications maison avaient laissés passer. On teste ce
 qu'on a écrit, pas ce que l'utilisateur va faire.
 
-Puis :
+Puis, dans cet ordre :
 
-1. Bumper `VERSION` dans `sw.js`.
-2. Message de commit en français, qui dit **ce qui cassait** avant de dire ce
+1. **Si `tools/audit.js` a été modifié, ou si une app vient d'être ajoutée :
+   prouver que l'audit mord.** Injecter un défaut qui change une MESURE réelle,
+   vérifier qu'il ressort au rapport, le retirer, relancer. Cette étape n'est
+   pas facultative : la consigne existait plus haut depuis le début et n'avait
+   jamais été exécutée, ce qui a laissé passer trois angles morts en une seule
+   session (aucun écran visité sans plan, `<label for>` pris pour un champ sans
+   nom, `opacity` d'un ancêtre invisible au calcul de contraste).
+2. Bumper `VERSION` dans `sw.js`.
+3. Message de commit en français, qui dit **ce qui cassait** avant de dire ce
    qui change.
-3. `git push origin main`. Les identifiants sont dans le gestionnaire Windows,
+4. `git push origin main`. Les identifiants sont dans le gestionnaire Windows,
    rien n'est demandé.
+
+## Une consigne de ce fichier qui surprend est une consigne à retester
+
+Ce qui est écrit ici sur l'ENVIRONNEMENT (captures, clics, serveurs, chemins,
+outils) pourrit, contrairement à ce qui est écrit sur le DOMAINE. Si une
+consigne d'environnement contredit ce que tu observes, **teste-la avant de lui
+obéir**, puis corrige-la ici en gardant la date de l'ancienne version.
+
+Ce fichier a affirmé pendant des semaines que le panneau navigateur ne
+capturait pas. C'était vrai en août 2026, ça ne l'était plus, et la consigne a
+fait travailler à l'aveugle une partie d'une session alors qu'un simple
+screenshot suffisait.
 
 `gh` n'est installé nulle part sur cette machine. Créer un dépôt passe donc par
 l'interface web ; le push, lui, fonctionne seul. GitHub Pages sert le dépôt sur
