@@ -176,7 +176,15 @@ body{
   text-transform:uppercase;color:var(--accent);
 }
 
-.exo{padding:14px 16px 16px;margin-bottom:14px;}
+.exo{
+  padding:14px 16px 16px;margin-bottom:14px;
+  transition:opacity .3s ease;
+}
+
+/* Un exercice fini s'efface sans disparaître : il descend en bas de la liste
+   et reste consultable, mais ne dispute plus l'attention à celui qui reste. */
+.exo.fini{opacity:.5;}
+.exo.fini .exo-compte{color:var(--accent);}
 
 .exo-tete{
   display:flex;justify-content:space-between;align-items:baseline;

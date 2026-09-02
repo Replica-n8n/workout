@@ -158,6 +158,12 @@ Une seule page. Trois séances au choix, la charge de travail en haut, et une
 case par série. On coche, le repos part tout seul, la barre de progression de
 l'exercice avance. Rien d'autre à faire pendant la séance.
 
+**Un exercice dont toutes les séries sont cochées descend en bas de la liste**,
+une demi-seconde après la dernière case, et s'estompe. Celui qui reste à faire
+remonte donc tout seul en tête. Le déplacement ne concerne que l'affichage :
+les séries restent rattachées à l'exercice, pas à sa position. Décocher une
+série le fait remonter à sa place d'origine.
+
 ### La charge
 
 Le German Volume Training travaille à **60 % du 1RM**. Le 1RM se saisit une

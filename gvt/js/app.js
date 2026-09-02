@@ -338,16 +338,48 @@ function montrer(id) {
     }).join('');
 
   seance.exercices.forEach((_, iExo) => majExercice(iExo));
+  /* Une séance reprise en cours de route s'ouvre déjà rangée, sans attendre
+     qu'on coche quoi que ce soit. */
+  clearTimeout(descenteId);
+  reordonner();
   desarmerVidage();
 }
 
+/* Renvoie true si l'exercice vient de passer fini, ou de cesser de l'être :
+   c'est le seul cas où l'ordre de la liste doit bouger. */
 function majExercice(iExo) {
   const bloc = elSeance.querySelector('.exo[data-exo="' + iExo + '"]');
-  if (!bloc) return;
+  if (!bloc) return false;
   const cases = bloc.querySelectorAll('input[type=checkbox]');
   const faites = bloc.querySelectorAll('input[type=checkbox]:checked').length;
   bloc.querySelector('[data-jauge]').style.width = (faites / cases.length * 100) + '%';
   bloc.querySelector('[data-compte]').textContent = faites + ' / ' + cases.length + ' séries';
+
+  const fini = faites === cases.length;
+  const etaitFini = bloc.classList.contains('fini');
+  bloc.classList.toggle('fini', fini);
+  return fini !== etaitFini;
+}
+
+/* Les exercices finis descendent, pour que le suivant à faire soit toujours
+   en tête. `data-exo` reste l'index d'origine dans le catalogue : c'est lui
+   qui compose les clés de stockage, et le déplacement ne concerne QUE
+   l'affichage. Les toucher reviendrait à effacer des séries en changeant
+   l'ordre. */
+function reordonner() {
+  [...elSeance.querySelectorAll('.exo')]
+    .map(bloc => ({ bloc, fini: bloc.classList.contains('fini') ? 1 : 0, i: Number(bloc.dataset.exo) }))
+    .sort((a, b) => (a.fini - b.fini) || (a.i - b.i))
+    .forEach(({ bloc }) => elSeance.appendChild(bloc));   // appendChild DÉPLACE
+}
+
+/* La descente attend une demi-seconde. Sans ce délai, la carte s'échappe
+   sous le doigt à l'instant même où on coche la dernière série, et le
+   déplacement se lit comme un bug plutôt que comme un rangement. */
+let descenteId = null;
+function reordonnerBientot() {
+  clearTimeout(descenteId);
+  descenteId = setTimeout(reordonner, 500);
 }
 
 elSeance.addEventListener('change', e => {
@@ -360,8 +392,17 @@ elSeance.addEventListener('change', e => {
   else delete series[box.dataset.cle];
   ecrire(CLES.series, series);
 
-  majExercice(Number(box.dataset.exo));
+  const iExo = Number(box.dataset.exo);
+  const ordreChange = majExercice(iExo);
   desarmerVidage();
+
+  if (ordreChange) {
+    reordonnerBientot();
+    const bloc = elSeance.querySelector('.exo[data-exo="' + iExo + '"]');
+    if (bloc.classList.contains('fini')) {
+      annoncer(bloc.querySelector('.exo-nom').textContent + ' terminé.');
+    }
+  }
 
   if (box.checked) {
     vibrer(50);
