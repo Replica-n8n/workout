@@ -15,7 +15,17 @@
 <body>
 
 <canvas id="carte" aria-label="Carte du quartier et de la boucle proposée"></canvas>
-<p id="etat" role="status" hidden></p>
+
+<div id="installe" hidden>
+  <span class="quoi">Installer Runa</span>
+  <button class="oui" id="installer">Installer</button>
+  <button class="non" id="plus-tard" aria-label="Plus tard">&#10005;</button>
+</div>
+
+<div id="etat" role="status" hidden>
+  <span id="etat-texte"></span>
+  <span id="etat-barre" hidden><i></i></span>
+</div>
 
 <section id="panneau">
 
@@ -48,7 +58,6 @@
     </button>
 
     <button class="principal" id="chercher">Trouver trois boucles</button>
-    <button class="secondaire" id="installer" hidden>Installer sur l’écran d’accueil</button>
     <p class="pied" id="astuce">Touchez la carte pour déplacer le départ.</p>
   </div>
 

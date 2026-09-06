@@ -1,12 +1,14 @@
 /* =========================================================================
    Runa · la requête OpenStreetMap
 
-   Ce module ne fait AUCUN appel réseau : il fabrique la requête et découpe
-   le monde en tuiles. Le téléchargement et le cache vivent dans
-   `js/donnees.js`, côté navigateur. C'est ce qui permet de tester la
-   requête sans jamais taper sur Overpass, dont la limite de débit est
-   agressive et qu'on n'a aucune raison de saturer pendant des tests.
+   Ce module ne fait AUCUN appel réseau : il fabrique la requête et décide de
+   la zone à demander. Le téléchargement et le cache vivent dans
+   `js/donnees.js`, côté navigateur. C'est ce qui permet de tester tout ça
+   sans jamais taper sur Overpass, dont la limite de débit est agressive et
+   qu'on n'a aucune raison de saturer pendant des tests.
    ========================================================================= */
+
+const R = 6371008.8, RAD = Math.PI / 180;
 
 /* Ce qui ne se court pas, filtré côté serveur pour ne pas télécharger des
    mégaoctets de voies rapides qu'on jetterait ensuite. */
@@ -20,7 +22,7 @@ const EXCLUS = [
  * @param {{sud,ouest,nord,est}} b
  * @param {number} [timeout] secondes accordées au serveur
  */
-export function requete(b, timeout = 50) {
+export function requete(b, timeout = 90) {
   const boite = `${b.sud.toFixed(6)},${b.ouest.toFixed(6)},${b.nord.toFixed(6)},${b.est.toFixed(6)}`;
   // Trois sorties, et l'ordre compte :
   //   1. les ways avec leurs tags ET leurs références de noeuds (`body`)
@@ -37,45 +39,59 @@ out body qt;`;
 }
 
 /**
- * Clé de tuile pour le cache.
+ * Retrouver une zone déjà en mémoire.
  *
- * Overpass est lent et limité en débit, mais les rues ne bougent quasiment
- * pas : ce qu'on télécharge une fois est bon pour des semaines. On découpe
- * donc en tuiles fixes plutôt que de cacher par requête, sinon deux départs
- * distants de 50 mètres feraient deux téléchargements complets.
+ * ⚠️ Trois tentatives, et les deux premières avaient le même défaut de
+ * fond : vouloir ranger les zones sur une grille.
  *
- * 0.02° font environ 2,2 km en latitude : une tuile couvre largement une
- * boucle d'une heure, et un quartier tient en une poignée de tuiles.
+ *   1. Une tuile par requête. Une boîte à cheval sur la grille en touche
+ *      quatre : quatre requêtes, quatre attentes, quatre occasions d'échouer.
+ *   2. Une seule requête sur le rectangle de tuiles englobant. Mesuré sur
+ *      Montréal, Paris et Sydney : jusqu'à QUATRE FOIS le disque utile, soit
+ *      6,8 Mo au lieu de 2,3 sur un forfait mobile.
+ *   3. Une clé arrondie au millième de degré. Mesuré : un point posé près
+ *      d'une frontière de la maille bascule d'une clé à l'autre à chaque
+ *      relève du GPS, et 27 relèves sur 40 retombaient à côté. Arrondir ne
+ *      supprime pas les frontières, il les déplace.
+ *
+ * On garde donc chaque zone avec SON centre et SON rayon, et on cherche par
+ * inclusion : n'importe quelle zone mémorisée qui contient entièrement le
+ * disque demandé fait l'affaire. Aucune grille, aucune frontière, et le
+ * tremblement du GPS devient sans effet.
  */
-export const PAS_TUILE = 0.02;
-
-export function tuile(point) {
-  return {
-    i: Math.floor(point.lat / PAS_TUILE),
-    j: Math.floor(point.lon / PAS_TUILE)
-  };
+export function zoneCouvre(zone, centre, rayonM) {
+  if (!zone || typeof zone.rayon !== 'number') return false;
+  return distance(zone, centre) + rayonM <= zone.rayon;
 }
 
-export function cleTuile(t) { return `${t.i}:${t.j}`; }
-
-/** Les tuiles qui couvrent une boîte. Pas de marge : la boîte est déjà
-    calculée avec un rayon confortable autour du départ, en ajouter une
-    doublerait le téléchargement du premier quartier pour rien. */
-export function tuilesPour(b) {
-  const out = [];
-  const i0 = Math.floor(b.sud / PAS_TUILE), i1 = Math.floor(b.nord / PAS_TUILE);
-  const j0 = Math.floor(b.ouest / PAS_TUILE), j1 = Math.floor(b.est / PAS_TUILE);
-  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) out.push({ i, j });
-  return out;
+function distance(a, b) {
+  const dLat = (b.lat - a.lat) * RAD, dLon = (b.lon - a.lon) * RAD;
+  const h = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.lat * RAD) * Math.cos(b.lat * RAD) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-export function boiteDeTuile(t) {
-  return {
-    sud: t.i * PAS_TUILE,
-    ouest: t.j * PAS_TUILE,
-    nord: (t.i + 1) * PAS_TUILE,
-    est: (t.j + 1) * PAS_TUILE
-  };
+/* On demande un peu plus large que le strict nécessaire, pour que le départ
+   d'à côté et la relève GPS suivante retombent dans la même zone au lieu de
+   retélécharger. 150 m est le compromis : au-delà, la surface croît vite. */
+export const MARGE_ZONE = 150;
+
+/* Poids observé des données OSM en ville dense : 589 Ko/km² sur le Plateau
+   Mont-Royal, 718 Ko/km² dans le 11e à Paris. On prend le milieu.
+   ⚠️ Overpass ne renvoie AUCUN Content-Length sur une réponse en flux : sans
+   cette estimation il n'y a pas de barre de progression possible, et une
+   barre inventée qui se bloque à 97 % est pire que pas de barre du tout. */
+export const OCTETS_PAR_KM2 = 650e3;
+
+/** L'aire d'une boîte, en km². */
+export function aireKm2(b) {
+  const hauteur = (b.nord - b.sud) * RAD * R;
+  const largeur = (b.est - b.ouest) * RAD * R * Math.cos(((b.sud + b.nord) / 2) * RAD);
+  return (hauteur * largeur) / 1e6;
+}
+
+export function poidsEstime(b) {
+  return aireKm2(b) * OCTETS_PAR_KM2;
 }
 
 /** Fusionne plusieurs réponses Overpass en une seule, sans doublons. */

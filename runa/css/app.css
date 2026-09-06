@@ -66,6 +66,70 @@ body {
 #etat[hidden] { display: none; }
 #etat.erreur { color: var(--rouge); border-color: var(--rouge); }
 
+/* La barre d'avancement. Sans elle, une minute d'attente sur une carte noire
+   se lit comme une panne, et on ferme l'app. */
+#etat-barre {
+  display: block;
+  height: 5px;
+  margin-top: 9px;
+  background: var(--case);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#etat-barre[hidden] { display: none; }
+#etat-barre i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--vert);
+  border-radius: 3px;
+  transition: width .35s ease-out;
+}
+/* Avant le premier octet, Overpass prepare sa reponse et rien ne progresse :
+   une barre figee a zero ferait croire a un blocage, une barre qui va et
+   vient dit honnetement qu'on attend. */
+#etat-barre.attente i {
+  width: 40%;
+  animation: va-et-vient 1.6s ease-in-out infinite;
+}
+@keyframes va-et-vient {
+  0%   { margin-left: -40%; }
+  100% { margin-left: 100%; }
+}
+
+/* Le bandeau d'installation. ⚠️ La version precedente etait un bouton
+   discret en bas de panneau : invisible en pratique, elle ne l'a pas vu.
+   Un navigateur ne propose plus rien tout seul, donc c'est a l'app de le
+   faire, et de le faire voir. */
+#installe {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--vert);
+  color: #0d0f12;
+  border-radius: 12px;
+  padding: 8px 8px 8px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+}
+#installe[hidden] { display: none; }
+#installe .quoi { flex: 1; font-weight: 600; font-size: .95rem; }
+#installe .oui {
+  min-height: 44px; padding: 0 16px;
+  border: 0; border-radius: 9px;
+  background: #0d0f12; color: var(--vert);
+  font: 600 .95rem/1 inherit;
+}
+#installe .non {
+  width: 44px; height: 44px;
+  border: 0; border-radius: 9px;
+  background: transparent; color: #0d0f12;
+  font-size: 1.05rem;
+}
+
 /* -------------------------------------------------------------- panneau */
 
 #panneau {
@@ -173,9 +237,6 @@ button.principal {
   width: 100%;
 }
 button.principal:disabled { opacity: .4; }
-
-#installer { width: 100%; }
-#installer[hidden] { display: none; }
 
 button.secondaire {
   min-height: 46px;

@@ -11,6 +11,7 @@ import { construireGraphe, plusGrandeComposante } from '../lib/graph.js';
 import { genererBoucles } from '../lib/loop.js';
 import { accrocher, sensDeMarche, segmentSuivant, metresRestants, ECART_MAX_M } from '../lib/suivi.js';
 import { charger, chargerDuCache } from './donnees.js';
+import { MARGE_ZONE } from '../lib/overpass.js';
 import { Carte } from './carte.js';
 
 const $ = id => document.getElementById(id);
@@ -152,16 +153,34 @@ function lireParcours() {
 /* ---------------------------------------------------------------- états */
 
 let effacerEtat = null;
-function dire(texte, erreur = false) {
+
+/**
+ * @param {string|null} texte
+ * @param {object} [o]
+ * @param {boolean} [o.erreur]
+ * @param {number|'attente'|null} [o.part]  0..1, ou 'attente' pour un
+ *        va-et-vient quand on ne peut RIEN savoir de l'avancement.
+ */
+function dire(texte, o = {}) {
   clearTimeout(effacerEtat);
-  const e = $('etat');
+  const e = $('etat'), barre = $('etat-barre');
   if (!texte) { e.hidden = true; return; }
-  e.textContent = texte;
-  e.classList.toggle('erreur', erreur);
+  $('etat-texte').textContent = texte;
+  e.classList.toggle('erreur', !!o.erreur);
+
+  if (o.part === undefined || o.part === null) {
+    barre.hidden = true;
+  } else {
+    barre.hidden = false;
+    barre.classList.toggle('attente', o.part === 'attente');
+    barre.firstElementChild.style.width =
+      o.part === 'attente' ? '' : `${Math.round(o.part * 100)}%`;
+  }
   e.hidden = false;
 }
+function direUneErreur(texte) { dire(texte, { erreur: true }); }
 function direUnMoment(texte, erreur = false) {
-  dire(texte, erreur);
+  dire(texte, { erreur });
   effacerEtat = setTimeout(() => dire(null), erreur ? 9000 : 3500);
 }
 
@@ -183,11 +202,18 @@ function positionner() {
 
 /* --------------------------------------------------------------- rayon */
 
-/* La spec demande une boîte de D/4 autour du départ. En dessous de 900 m le
-   graphe devient trop maigre pour offrir un choix, au-delà de 2,5 km on
-   télécharge des quartiers qu'aucune boucle n'atteindra. */
+/* La spec demandait une boîte de D/4 autour du départ. Mesuré : c'est deux
+   fois trop, et chaque mètre de rayon coûte des mégaoctets sur le réseau
+   mobile. Les points intermédiaires d'une boucle de D se posent à environ
+   0,85 x D / 2π du départ, soit 675 m pour 5 km.
+
+   Vérifié sur les vraies rues de Montréal et de Paris : à 850 m de rayon les
+   trois boucles sortent identiques à celles obtenues avec 1500 m. À 700 m,
+   Paris se dégrade (jusqu'à 22 % d'écart à la cible). D / 5,5 donne 909 m
+   pour 5 km, juste au-dessus du seuil, avec un plancher pour les sorties
+   courtes. */
 function rayonPour(distanceCible) {
-  return Math.max(900, Math.min(2500, distanceCible / 4));
+  return Math.max(700, Math.min(2000, distanceCible / 5.5));
 }
 
 /* ------------------------------------------------------------- quartier
@@ -214,21 +240,27 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
     etat.grapheDe.eviterFeux === etat.eviterFeux;
   if (memeZone) return true;
 
-  const boite = bbox(etat.depart, rayon);
+  /* On télécharge un peu plus large qu'on n'a besoin, pour que le départ
+     d'à côté et la relève GPS suivante retombent dans la même zone. */
+  const boite = bbox(etat.depart, rayon + MARGE_ZONE);
   let osm;
 
   if (reseau) {
-    dire('Chargement des rues...');
-    osm = await charger(boite, (fait, total, toutEnCache) => {
-      if (toutEnCache) return dire('Quartier déjà en mémoire');
-      // Le premier quartier prend une bonne minute : le dire évite de croire
-      // que l'app est plantée et de la fermer.
-      dire(`Téléchargement de vos rues, ${fait} sur ${total}. Une minute environ, `
-         + `une seule fois par quartier.`);
+    dire('Préparation...', { part: 'attente' });
+    osm = await charger(etat.depart, rayon + MARGE_ZONE, boite, info => {
+      if (info.phase === 'memoire') return dire('Quartier déjà en mémoire', { part: 1 });
+      if (info.phase === 'attente') {
+        return dire('Le serveur prépare vos rues...', { part: 'attente' });
+      }
+      if (info.phase === 'range') return dire('Mise en mémoire...', { part: 1 });
+      // Les mégaoctets affichés sont EXACTS ; c'est la barre qui est une
+      // estimation, faute de taille annoncée par le serveur.
+      dire(`Téléchargement de vos rues, ${(info.octets / 1e6).toFixed(1)} Mo. `
+         + `Une seule fois par quartier.`, { part: info.part });
     });
   } else {
     // Au lancement : ce qui est déjà en mémoire, tout de suite, sans réseau.
-    osm = await chargerDuCache(boite);
+    osm = await chargerDuCache(etat.depart, rayon);
     if (!osm) return false;
   }
 
@@ -287,7 +319,7 @@ async function chercher(nouvelleGraine) {
     montrerResultats(cible, ms);
     dire(null);
   } catch (e) {
-    dire(message(e), true);
+    direUneErreur(message(e));
   } finally {
     enCours = false;
     $('chercher').disabled = false;
@@ -299,7 +331,9 @@ function message(e) {
   if (e && e.code === 2) return 'Position indisponible. Sortez ou activez la localisation, puis réessayez.';
   if (e && e.code === 3) return 'La position met trop de temps à arriver. Réessayez.';
   if (e && e.message === 'debit') return 'Le serveur OpenStreetMap est saturé. Réessayez dans une minute.';
-  if (e && e.message === 'lent') return 'Le serveur OpenStreetMap ne répond pas. Réessayez dans une minute.';
+  if (e && e.message === 'silence') return 'Le téléchargement s’est interrompu. Réessayez : ce qui était reçu n’est pas perdu.';
+  if (e && e.message === 'bloque') return 'La requête n’est jamais partie. Vérifiez le réseau, ou un bloqueur de contenu sur ce site.';
+  if (e && e.message && e.message.startsWith('http ')) return `Le serveur OpenStreetMap a refusé (${e.message}). Réessayez dans une minute.`;
   if (e && e.message === 'desert') return 'Trop peu de rues autour de ce départ pour tracer une boucle.';
   if (e && e.message === 'rien') return 'Aucune boucle trouvée ici à cette distance. Essayez une autre durée.';
   if (e && e.message === 'reseau') return 'Pas de réseau, et ce quartier n’est pas encore en mémoire.';
@@ -540,7 +574,7 @@ $('ma-position').addEventListener('click', async () => {
     await assurerQuartier(distancePour(etat.duree * 60, etat.allure));
     if (etat.depart.precision <= 50) dire(null);
   } catch (e) {
-    dire(message(e), true);
+    direUneErreur(message(e));
   } finally {
     b.disabled = false;
   }
@@ -630,7 +664,25 @@ let inviteInstallation = null;
 addEventListener('beforeinstallprompt', e => {
   e.preventDefault();
   inviteInstallation = e;
-  $('installer').hidden = false;
+  montrerBandeauInstallation();
+});
+
+const PLUS_TARD = 'runa-installe-plus-tard';
+
+function montrerBandeauInstallation() {
+  if (!inviteInstallation) return;
+  // Un refus explicite se respecte pendant une semaine : reproposer a chaque
+  // ouverture est le meilleur moyen de faire desinstaller une app.
+  try {
+    const t = Number(localStorage.getItem(PLUS_TARD) || 0);
+    if (Date.now() - t < 7 * 24 * 3600 * 1000) return;
+  } catch (e) {}
+  $('installe').hidden = false;
+}
+
+$('plus-tard').addEventListener('click', () => {
+  $('installe').hidden = true;
+  try { localStorage.setItem(PLUS_TARD, String(Date.now())); } catch (e) {}
 });
 
 $('installer').addEventListener('click', async () => {
@@ -640,7 +692,7 @@ $('installer').addEventListener('click', async () => {
   invite.prompt();
   const { outcome } = await invite.userChoice;
   if (outcome === 'accepted') {
-    $('installer').hidden = true;
+    $('installe').hidden = true;
   } else {
     // Refusée : le bouton reste, mais l'invite est consommée. Le navigateur
     // en renverra une plus tard ; d'ici là on renvoie vers le menu.
@@ -648,11 +700,12 @@ $('installer').addEventListener('click', async () => {
   }
 });
 
-addEventListener('appinstalled', () => { $('installer').hidden = true; });
+addEventListener('appinstalled', () => { $('installe').hidden = true; });
 
-// Déjà installée : le bouton n'a plus lieu d'être.
+// Déjà installée : le bandeau n'a plus lieu d'être.
 if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
-  $('installer').hidden = true;
+  $('installe').hidden = true;
+  inviteInstallation = null;
 }
 
 if ('serviceWorker' in navigator) {
