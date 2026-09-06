@@ -20,6 +20,11 @@
 <section id="panneau">
 
   <div id="reglages">
+    <div class="ligne">
+      <span class="nom">Départ<span class="sous" id="depart-quoi">pas encore défini</span></span>
+      <button class="secondaire" id="ma-position">Ma position</button>
+    </div>
+
     <p class="titre">Durée</p>
     <div class="chips" id="durees" role="group" aria-label="Durée de la sortie"></div>
 
@@ -49,6 +54,7 @@
   <div id="resultats" hidden>
     <p class="titre" id="resume"></p>
     <div id="boucles"></div>
+    <p class="pied" id="suivi" hidden></p>
     <div class="rangee" style="margin-top:10px">
       <button class="secondaire" id="autres">Trois autres</button>
       <button class="secondaire" id="retour">Réglages</button>

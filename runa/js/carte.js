@@ -16,6 +16,30 @@
 
 const R = 6371008.8, RAD = Math.PI / 180;
 
+/* Bornes de zoom, en pixels par mètre. En dessous, tout un arrondissement
+   tient dans un timbre ; au-dessus, on voit trois maisons. */
+export const ECHELLE_MIN = 0.02;
+export const ECHELLE_MAX = 3;
+
+/**
+ * L'échelle qui fait tenir un tracé de `largeurM` sur `largeurPx`.
+ *
+ * ⚠️ Extrait et exporté pour être testé, parce que la version naïve produit
+ * une échelle NÉGATIVE dès que la zone de carte est plus petite que deux
+ * fois la marge : le canvas lève alors « The radius provided is negative »
+ * et toute la carte disparaît. Vu en vrai en faisant pivoter le téléphone en
+ * paysage, où le panneau ne laisse que quelques dizaines de pixels à la
+ * carte. La marge doit donc s'effacer avant de rendre la place négative.
+ */
+export function echellePour(largeurPx, hauteurPx, largeurM, hauteurM, marge = 28) {
+  const m = Math.min(marge, Math.max(0, Math.min(largeurPx, hauteurPx) / 2 - 4));
+  const dispoX = Math.max(1, largeurPx - m * 2);
+  const dispoY = Math.max(1, hauteurPx - m * 2);
+  const e = Math.min(dispoX / Math.max(largeurM, 1), dispoY / Math.max(hauteurM, 1));
+  if (!Number.isFinite(e)) return ECHELLE_MIN;
+  return Math.max(ECHELLE_MIN, Math.min(ECHELLE_MAX, e));
+}
+
 export class Carte {
   constructor(canvas) {
     this.c = canvas;
@@ -24,6 +48,8 @@ export class Carte {
     this.rues = null;         // Path2D en mètres
     this.grandsAxes = null;
     this.trace = null;
+    this.restant = null;      // les prochains mètres, surlignés
+    this.moi = null;          // la position en direct
     this.depart = null;
     this.echelle = 0.35;      // pixels par mètre
     this.centre = { x: 0, y: 0 };
@@ -82,6 +108,11 @@ export class Carte {
   /** Cadre la vue sur une boucle, avec une marge. */
   cadrer(points) {
     if (!points || !points.length) return;
+    // Mémoriser de quoi recadrer si la fenêtre change de forme : sur un
+    // téléphone qui pivote, garder l'ancien cadrage laisse la boucle hors
+    // de l'écran, et on croit que le tracé a disparu.
+    this.cadre = points;
+    this.deplacee = false;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of points) {
       const m = this.versM(p);
@@ -89,11 +120,7 @@ export class Carte {
       if (m.y < y0) y0 = m.y; if (m.y > y1) y1 = m.y;
     }
     const { largeur, hauteur } = this.taille();
-    const marge = 28;
-    this.echelle = Math.min(
-      (largeur - marge * 2) / Math.max(x1 - x0, 1),
-      (hauteur - marge * 2) / Math.max(y1 - y0, 1)
-    );
+    this.echelle = echellePour(largeur, hauteur, x1 - x0, y1 - y0);
     this.centre = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
   }
 
@@ -121,6 +148,36 @@ export class Carte {
     this.dessiner();
   }
 
+  /**
+   * La position en direct, et les prochains mètres du parcours.
+   *
+   * C'est ce qui répond à « je tourne à gauche ou à droite ? » : voir où l'on
+   * est ne suffit pas sur une boucle, il faut voir de quel côté elle
+   * continue. Le segment surligné le dit sans qu'on ait à réfléchir.
+   */
+  suivre(moi, prochainsPoints) {
+    this.poserOrigine(moi);
+    this.moi = moi && this.origine ? this.versM(moi) : null;
+    this.restant = null;
+    if (prochainsPoints && prochainsPoints.length > 1 && this.origine) {
+      const p = new Path2D();
+      prochainsPoints.forEach((pt, i) => {
+        const m = this.versM(pt);
+        i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y);
+      });
+      this.restant = p;
+    }
+    this.dessiner();
+  }
+
+  /** Recentre sur un point sans changer le zoom. */
+  centrerSur(point) {
+    if (!this.origine || !point) return;
+    this.centre = this.versM(point);
+    this.deplacee = false;
+    this.dessiner();
+  }
+
   taille() {
     const r = this.c.getBoundingClientRect();
     return { largeur: r.width, hauteur: r.height };
@@ -140,7 +197,10 @@ export class Carte {
     ctx.fillRect(0, 0, largeur, hauteur);
     if (!this.origine) return;
 
-    const e = this.echelle;
+    // Dernier filet : une échelle non finie ou négative fait lever le canvas
+    // sur le premier `arc`, et la carte entière disparaît.
+    const e = Number.isFinite(this.echelle) && this.echelle > 0
+      ? this.echelle : ECHELLE_MIN;
     ctx.setTransform(dpr * e, 0, 0, dpr * e,
       dpr * (largeur / 2 - this.centre.x * e),
       dpr * (hauteur / 2 - this.centre.y * e));
@@ -171,9 +231,17 @@ export class Carte {
     }
 
     if (this.trace) {
-      ctx.strokeStyle = '#6ee7a0';
+      // Le parcours entier s'assombrit dès qu'une portion est surlignée :
+      // sans ce contraste, le surlignage ne se voit pas en plein soleil.
+      ctx.strokeStyle = this.restant ? '#2f6b4c' : '#6ee7a0';
       ctx.lineWidth = 5 / e;
       ctx.stroke(this.trace);
+    }
+
+    if (this.restant) {
+      ctx.strokeStyle = '#6ee7a0';
+      ctx.lineWidth = 7 / e;
+      ctx.stroke(this.restant);
     }
 
     if (this.depart) {
@@ -184,6 +252,19 @@ export class Carte {
       ctx.arc(this.depart.x, this.depart.y, 8 / e, 0, 7);
       ctx.fill();
       ctx.stroke();
+    }
+
+    if (this.moi) {
+      // Un disque plein, plus gros que le rond du départ : en courant, on
+      // regarde l'écran une seconde, il faut le trouver du premier coup.
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(this.moi.x, this.moi.y, 11 / e, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = '#101215';
+      ctx.beginPath();
+      ctx.arc(this.moi.x, this.moi.y, 5 / e, 0, 7);
+      ctx.fill();
     }
   }
 
@@ -212,7 +293,7 @@ export class Carte {
 
       if (maintenant.n === 2 && depart.n === 2 && depart.ecart > 10) {
         this.echelle = depart.echelle * (maintenant.ecart / depart.ecart);
-        this.echelle = Math.max(0.03, Math.min(3, this.echelle));
+        this.echelle = Math.max(ECHELLE_MIN, Math.min(ECHELLE_MAX, this.echelle));
       }
       this.centre = {
         x: depart.centre.x - (maintenant.milieu.x - depart.milieu.x) / this.echelle,
@@ -230,11 +311,21 @@ export class Carte {
 
     this.c.addEventListener('wheel', e => {
       e.preventDefault();
-      this.echelle = Math.max(0.03, Math.min(3, this.echelle * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+      this.echelle = Math.max(ECHELLE_MIN,
+        Math.min(ECHELLE_MAX, this.echelle * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
       this.dessiner();
     }, { passive: false });
 
-    addEventListener('resize', () => this.dessiner());
+    const bouge = () => { this.deplacee = true; };
+    this.c.addEventListener('pointermove', e => { if (doigts.has(e.pointerId)) bouge(); });
+    this.c.addEventListener('wheel', bouge, { passive: true });
+
+    addEventListener('resize', () => {
+      // Recadrer, sauf si elle a déplacé la carte elle-même : reprendre la
+      // main sur son cadrage serait plus agaçant qu'utile.
+      if (this.cadre && !this.deplacee) this.cadrer(this.cadre);
+      this.dessiner();
+    });
   }
 
   instantane(doigts) {

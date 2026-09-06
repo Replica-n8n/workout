@@ -96,6 +96,26 @@ async function telecharger(boite, signal) {
 }
 
 /**
+ * Ce qui est déjà en mémoire pour cette boîte, sans jamais toucher au réseau.
+ *
+ * Sert à redessiner les rues quand l'app rouvre en pleine course : on veut
+ * la carte tout de suite ou pas du tout, sûrement pas une minute d'attente
+ * et un quota Overpass consommé au milieu d'une sortie.
+ *
+ * @returns {object|null} null dès qu'une seule tuile manque
+ */
+export async function chargerDuCache(boite) {
+  const tuiles = tuilesPour(boite);
+  const reponses = [];
+  for (const t of tuiles) {
+    const osm = await lire(cleTuile(t));
+    if (!osm) return null;
+    reponses.push(osm);
+  }
+  return fusionner(reponses);
+}
+
+/**
  * Les données OSM couvrant une boîte, cache d'abord.
  * @param {object} boite  {sud, ouest, nord, est}
  * @param {(fait:number, total:number, depuisLeCache:boolean) => void} [avance]

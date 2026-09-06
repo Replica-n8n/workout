@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { construireGraphe, plusGrandeComposante } from '../lib/graph.js';
-import { genererBoucles, partLongee, sansAllerRetour } from '../lib/loop.js';
+import { genererBoucles, partLongee, sansAllerRetour, capsAEssayer } from '../lib/loop.js';
 import { damier } from './grille.js';
 
 function quartier(o = {}) {
@@ -27,8 +27,9 @@ test('les trois boucles ne sont pas la même', () => {
   for (let i = 0; i < b.length; i++) {
     for (let j = i + 1; j < b.length; j++) {
       const communs = [...b[j].ways].filter(w => b[i].ways.has(w)).length;
-      const part = communs / Math.min(b[i].ways.size, b[j].ways.size);
-      assert.ok(part <= 0.5, `boucles ${i} et ${j} partagent ${(part * 100).toFixed(0)} % de leurs rues`);
+      const jaccard = communs / (b[i].ways.size + b[j].ways.size - communs);
+      assert.ok(jaccard <= 0.5,
+        `boucles ${i} et ${j} : Jaccard ${jaccard.toFixed(2)} sur leurs rues`);
     }
   }
 });
@@ -159,15 +160,57 @@ test('aucune boucle rendue ne contient de demi-tour immédiat', () => {
   }
 });
 
-test('chaque boucle annonce une direction', () => {
+test('les caps essayés couvrent la période utile, pas le tour complet', () => {
+  // ⚠️ Avec 3 points intermédiaires posés à 120°, tourner le cap de 120°
+  // redonne EXACTEMENT le même triangle, donc la même boucle. La période
+  // utile est 360/points, et écarter les caps sur 360° tombait pile sur les
+  // doublons : deux propositions au lieu de trois.
+  const caps = capsAEssayer(3, () => 0, 3);
+  assert.deepEqual(caps.slice(0, 3).sort((a, b) => a - b), [0, 40, 80]);
+
+  // Avec 4 points, la période tombe à 90°, et les caps suivent.
+  assert.deepEqual(capsAEssayer(3, () => 0, 4).slice(0, 3).sort((a, b) => a - b), [0, 30, 60]);
+
+  // Quel que soit le tirage, les `nb` premiers restent équirépartis sur la
+  // période : c'est ce qui garantit des propositions vraiment différentes.
+  for (const tirage of [0.1, 0.37, 0.99]) {
+    const c = capsAEssayer(3, () => tirage, 3).slice(0, 3);
+    const ecarts = [1, 2].map(i => ((c[i] - c[i - 1]) + 360) % 360);
+    for (const e of ecarts) assert.ok(Math.abs(e - 40) < 0.001, `écart de ${e}°`);
+  }
+
+  // Les couronnes suivantes comblent les trous, sans doublon.
+  const tous = capsAEssayer(3, () => 0, 3);
+  assert.equal(tous.length, 9);
+  assert.equal(new Set(tous.map(x => x.toFixed(3))).size, 9);
+});
+
+test('chaque boucle nomme la rue sur laquelle on court le plus', () => {
+  // Remplace une indication de direction qui ne valait rien : une boucle
+  // entoure son départ, donc son centre de gravité reste collé au départ.
   const { d, g } = quartier();
   const b = genererBoucles(g, { depart: d.centre, distanceCible: 3000, graine: 7 });
-  const rose = ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-ouest', 'ouest', 'nord-ouest'];
-  for (const x of b) assert.ok(rose.includes(x.direction), `direction inattendue : ${x.direction}`);
-  // Et elles ne partent pas toutes du même côté, sinon l'information
-  // n'aiderait pas à choisir.
-  assert.ok(new Set(b.map(x => x.direction)).size >= 2,
-    'les trois boucles partent toutes dans la même direction');
+  for (const x of b) {
+    assert.ok(x.rues.length, 'aucune rue trouvée');
+    assert.ok(x.rues.length <= 3, 'plus de trois rues proposées');
+    for (const r of x.rues) {
+      assert.match(r.nom, /^(rue|avenue) \d+$/, `nom inattendu : ${r.nom}`);
+      assert.ok(r.m >= 250, `${r.m} m, sous le seuil d'annonce`);
+      assert.ok(r.m <= x.m, 'une rue plus longue que la boucle entière');
+    }
+    // Triées de la plus longue à la plus courte : l'affichage prend la
+    // première encore libre et compte sur cet ordre.
+    for (let i = 1; i < x.rues.length; i++) assert.ok(x.rues[i - 1].m >= x.rues[i].m);
+  }
+});
+
+test('aucune rue annoncée quand aucune ne domine', () => {
+  // Un quartier sans noms de rue : mieux vaut ne rien dire que d'inventer.
+  const d = damier({ cotes: 41 });
+  for (const el of d.osm.elements) if (el.type === 'way') delete el.tags.name;
+  const g = plusGrandeComposante(construireGraphe(d.osm));
+  const [b] = genererBoucles(g, { depart: d.centre, distanceCible: 3000, graine: 7 });
+  assert.deepEqual(b.rues, []);
 });
 
 test('un départ hors du graphe ne fait pas planter', () => {

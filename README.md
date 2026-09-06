@@ -284,6 +284,38 @@ se cumulent, et le premier est le plus efficace :
 Effet mesuré : la part de tracé qui se longe elle-même passe d'une médiane de
 12 % à 5 %, et son 90e centile de 25 % à 9 %.
 
+### Pendant la course
+
+C'est le geste qui compte : on sort le téléphone de sa poche à un carrefour,
+et on veut savoir de quel côté la boucle continue.
+
+- **Le parcours choisi est écrit sur le disque**, pas gardé en mémoire.
+  Android est libre de tuer une PWA restée en poche ; sans ça, rouvrir l'app
+  en pleine course rendait un écran vide.
+- **La position s'affiche en direct** et **les 400 prochains mètres sont
+  surlignés**. Voir où l'on est ne suffit pas sur une boucle : le tracé passe
+  des deux côtés du point où l'on se trouve. Le segment vif répond à
+  « gauche ou droite » sans qu'on ait à réfléchir.
+- **Le sens de marche se déduit de la progression**, donc courir la boucle à
+  l'envers fonctionne aussi.
+- **Tout ça sans réseau** : les rues viennent du cache, et le GPS ne tourne
+  que pendant que l'app est ouverte et visible. Il s'arrête dès qu'elle passe
+  en arrière-plan, sinon on viderait la batterie d'une poche.
+
+### Trois pièges de géométrie, tous rencontrés en vrai
+
+1. **Le premier et le dernier point du tracé sont le même carrefour.** Sur la
+   ligne de départ, l'app annonçait « Encore 0 m ». Une position isolée ne peut
+   pas trancher entre « je pars » et « j'arrive » : seul le chemin déjà
+   parcouru le dit.
+2. **Le point le plus proche peut appartenir au brin d'en face.** Deux
+   portions d'une même boucle passent souvent à trente mètres l'une de
+   l'autre. On cherche donc d'abord autour de la position précédente.
+3. **L'échelle de la carte pouvait devenir négative.** En paysage, le panneau
+   ne laisse que quelques dizaines de pixels à la carte, et retrancher deux
+   marges de 28 px donnait une place négative : le canvas levait « The radius
+   provided is negative » et toute la carte disparaissait.
+
 ### La structure
 
 ```
@@ -296,11 +328,12 @@ runa/
     route.js            A* sur ce graphe
     loop.js             le générateur de boucles
     overpass.js         la requête et le découpage en tuiles
+    suivi.js            se situer sur le parcours pendant la course
   js/                   tout ce qui touche au navigateur
     donnees.js          téléchargement et cache IndexedDB par tuile
     carte.js            la carte, sur un canvas
     app.js              l'assemblage, aucun calcul
-  tests/                42 tests, `npm test` ou `node --test tests/*.test.js`
+  tests/                58 tests, `npm test` ou `node --test tests/*.test.js`
 ```
 
 ### Le réseau, et quand il sert
@@ -314,8 +347,12 @@ n'en a besoin qu'une fois par quartier, jamais pendant la course.
 
 Elle **n'enregistre pas les courses**. Aucune API web ne donne accès au GPS en
 arrière-plan, sur aucune plateforme : une PWA dont l'écran s'éteint perd son
-tracé. L'allure corrigée et l'exploration du quartier, qui ont besoin de traces
-enregistrées, attendent donc une coquille native.
+tracé. C'est la seule limite, et elle est nette : app ouverte et écran allumé,
+le GPS marche très bien, ce qui suffit pour se situer en cours de route. Ce
+qui ne marche pas, c'est le suivi continu en poche.
+
+L'allure corrigée et l'exploration du quartier, qui ont besoin de traces
+enregistrées de bout en bout, attendent donc une coquille native.
 
 ---
 

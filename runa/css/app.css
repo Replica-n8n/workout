@@ -157,7 +157,9 @@ body {
   border-color: var(--vert);
   color: #0d0f12;
 }
-.option .sous { display: block; font-size: .78rem; color: var(--gris); }
+.sous { display: block; font-size: .78rem; color: var(--gris); font-weight: 400; }
+.sous.vieux { color: var(--jaune); }
+.sous.faux { color: var(--rouge); }
 
 button.principal {
   min-height: 54px;
@@ -190,7 +192,7 @@ button.secondaire {
   gap: 12px;
   width: 100%;
   min-height: 62px;
-  padding: 10px 12px;
+  padding: 10px 10px;
   border: 1px solid var(--trait);
   border-radius: 12px;
   background: var(--case);
@@ -203,10 +205,10 @@ button.secondaire {
   background: var(--case-active);
 }
 .boucle .km {
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  min-width: 86px;
+  min-width: 78px;
 }
 .boucle .detail { flex: 1; font-size: .82rem; color: var(--gris); line-height: 1.35; }
 .boucle .detail b { color: var(--texte); font-weight: 600; }
@@ -220,3 +222,7 @@ button.secondaire {
 .rangee > * { flex: 1; }
 
 .pied { font-size: .76rem; color: var(--gris); text-align: center; margin: 0; }
+#suivi { margin-top: 8px; font-size: .84rem; }
+#suivi.dehors { color: var(--jaune); }
+#suivi b { color: var(--texte); font-variant-numeric: tabular-nums; }
+#suivi[hidden] { display: none; }

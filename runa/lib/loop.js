@@ -19,7 +19,7 @@
       seule, et la seconde est rejetée.
    ========================================================================= */
 
-import { destination, rayonDepart, capDeg } from './geo.js';
+import { destination, rayonDepart } from './geo.js';
 import { chemin, waysDuChemin, polyligne } from './route.js';
 
 /* Le renchérissement des ways empêche de reprendre LA MÊME rue, pas de
@@ -34,8 +34,6 @@ import { chemin, waysDuChemin, polyligne } from './route.js';
 const LONGEE_MAXIMALE = 0.20;
 const LONGEE_SEUIL_M = 30;      // « à côté », c'est la rue parallèle
 const LONGEE_ECART = 12;        // en deçà, deux points sont simplement voisins
-
-const ROSE = ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-ouest', 'ouest', 'nord-ouest'];
 
 const R = 6371008.8, RAD = Math.PI / 180;
 function metres(a, b) {
@@ -126,13 +124,7 @@ export function genererBoucles(graphe, opts) {
   const boucles = [];
   const dejaVues = [];
 
-  // Écarter les directions de départ, sinon les trois propositions se
-  // ressemblent. On en essaie plus que nécessaire : certaines directions ne
-  // donnent rien (un fleuve, une voie ferrée, une impasse de quartier).
-  const directions = [];
-  for (let i = 0; i < nb * 3; i++) directions.push((360 / (nb * 3)) * i + rnd() * 20);
-
-  for (const cap0 of directions) {
+  for (const cap0 of capsAEssayer(nb, rnd, points)) {
     if (boucles.length >= nb) break;
     const b = uneBoucle(graphe, grille, idDepart, pDepart, {
       distanceCible, tolerance, points, cap0, rnd, maxEssais, facteurRetour
@@ -177,14 +169,52 @@ function metrique(graphe, ids) {
   return total;
 }
 
+/**
+ * L'ordre dans lequel on essaie les caps de départ.
+ *
+ * ⚠️ La période utile n'est PAS 360°, c'est 360 / `points`. Les points
+ * intermédiaires sont posés à `cap0`, `cap0 + 360/points`, etc. : faire
+ * tourner `cap0` d'un pas complet redonne le MÊME triangle, donc la même
+ * boucle. Trouvé sur Montréal en essayant d'écarter les caps sur tout le
+ * tour, ce qui ne produisait plus que deux propositions au lieu de trois,
+ * les autres étant des doublons rejetés en silence.
+ *
+ * On répartit donc sur la période réelle, par couronnes : les `nb` premiers
+ * caps sont les plus écartés possible, les suivants comblent les trous et
+ * servent quand une direction est fermée par un fleuve ou une voie ferrée.
+ */
+export function capsAEssayer(nb, rnd = Math.random, points = 3, couronnes = 3) {
+  const caps = [];
+  const periode = 360 / points;
+  const pas = periode / nb;
+  const depart = rnd() * 360;          // pour ne pas toujours partir pareil
+  for (let c = 0; c < couronnes; c++) {
+    const decalage = c === 0 ? 0 : pas / Math.pow(2, c);
+    for (let i = 0; i < nb; i++) caps.push((depart + decalage + pas * i) % 360);
+  }
+  return caps;
+}
+
+/**
+ * Ressemblance de deux boucles : indice de Jaccard sur leurs rues, donc
+ * l'intersection divisée par l'UNION.
+ *
+ * ⚠️ Diviser par le plus petit des deux ensembles, ce qui paraît naturel,
+ * exagère beaucoup : deux boucles partagent forcément les rues des premières
+ * et dernières centaines de mètres, puisqu'elles partent du même point.
+ * Mesuré sur neuf candidates : médiane 0,63 en divisant par le plus petit
+ * contre 0,36 en Jaccard sur un damier régulier, 0,19 contre 0,09 sur les
+ * vraies rues de Montréal. Au seuil de 0,5, la première version rejetait
+ * plus de la moitié des paires d'un damier et ne rendait que deux
+ * propositions au lieu de trois.
+ */
 function ressemblance(a, b) {
-  // Sans ce garde-fou, deux ensembles vides donnent 0/0, donc NaN, et
-  // `NaN > 0.5` étant faux, la boucle en double passerait le filtre.
-  const petit = Math.min(a.size, b.size);
-  if (!petit) return 0;
+  // Deux ensembles vides donneraient 0/0, donc NaN, et `NaN > 0.5` étant
+  // faux, la boucle en double passerait le filtre sans rien signaler.
   let communs = 0;
   for (const w of b) if (a.has(w)) communs++;
-  return communs / petit;
+  const union = a.size + b.size - communs;
+  return union ? communs / union : 0;
 }
 
 function uneBoucle(graphe, grille, idDepart, pDepart, o) {
@@ -312,15 +342,39 @@ export function partLongee(points, seuilM = LONGEE_SEUIL_M, ecart = LONGEE_ECART
   return longes / n;
 }
 
-/** Vers où part la boucle, vue du départ : la seule chose qui distingue
-    vraiment trois propositions de même longueur et de même profil. */
-function direction(points, pDepart) {
-  if (!points.length) return null;
-  let lat = 0, lon = 0;
-  for (const p of points) { lat += p.lat; lon += p.lon; }
-  const centre = { lat: lat / points.length, lon: lon / points.length };
-  const cap = capDeg(pDepart, centre);
-  return ROSE[Math.round(cap / 45) % 8];
+/**
+ * La rue sur laquelle on court le plus de mètres.
+ *
+ * ⚠️ Remplace une indication de direction qui semblait bonne et ne valait
+ * rien : une boucle ENTOURE son départ, donc son centre de gravité reste
+ * collé au départ, et le cap calculé depuis lui n'était que du bruit. Sur
+ * Montréal, trois boucles pourtant très différentes s'annonçaient toutes
+ * « vers l'est ».
+ *
+ * Le nom de rue, lui, est ce avec quoi on décrit vraiment un parcours à
+ * quelqu'un : « celle qui passe par Mont-Royal ».
+ */
+function ruesDuParcours(graphe, ids) {
+  const metres = new Map();
+  for (let i = 1; i < ids.length; i++) {
+    const a = (graphe.voisins.get(ids[i - 1]) || []).find(x => x.vers === ids[i]);
+    if (!a) continue;
+    const t = graphe.ways.get(a.way);
+    if (!t || !t.name) continue;
+    metres.set(t.name, (metres.get(t.name) || 0) + a.m);
+  }
+  // On rend les trois premières, pas seulement la plus longue : deux boucles
+  // pourtant très différentes peuvent longer la même grande avenue, et les
+  // annoncer toutes deux par elle les rendrait indiscernables dans la liste.
+  // C'est à l'affichage de prendre la première encore libre.
+  //
+  // En dessous de 250 m, ce n'est plus « la rue du parcours » mais une rue
+  // parmi trente : mieux vaut ne rien annoncer que d'annoncer au hasard.
+  return [...metres.entries()]
+    .filter(([, m]) => m >= 250)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([nom, m]) => ({ nom, m: Math.round(m) }));
 }
 
 function mesurer(graphe, ids, m, ways, pDepart) {
@@ -349,7 +403,7 @@ function mesurer(graphe, ids, m, ways, pDepart) {
     feux,
     ways,
     longee: partLongee(points),
-    direction: direction(points, pDepart),
+    rues: ruesDuParcours(graphe, ids),
     // `null` et non 0 quand OSM ne dit rien : afficher « 0 % éclairé » sur un
     // quartier non renseigné serait un mensonge, et c'est exactement le
     // piège que la spec signale sur le tag `lit`.

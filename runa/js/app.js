@@ -9,11 +9,16 @@
 import { bbox, distancePour } from '../lib/geo.js';
 import { construireGraphe, plusGrandeComposante } from '../lib/graph.js';
 import { genererBoucles } from '../lib/loop.js';
-import { charger } from './donnees.js';
+import { accrocher, sensDeMarche, segmentSuivant, metresRestants, ECART_MAX_M } from '../lib/suivi.js';
+import { charger, chargerDuCache } from './donnees.js';
 import { Carte } from './carte.js';
 
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
+const CLE_PARCOURS = 'runa-parcours-v1';
+/* Au-delà, le parcours mémorisé n'est plus « celui en cours » mais celui
+   d'avant-hier, et le restaurer au lancement embrouillerait. */
+const PARCOURS_VALIDE_MS = 8 * 3600 * 1000;
 
 const DUREES = [20, 30, 40, 50, 60];
 
@@ -74,8 +79,74 @@ function peindreReglages() {
   $('opt-feux').setAttribute('aria-pressed', String(etat.eviterFeux));
   $('opt-nuit').setAttribute('aria-pressed', String(etat.nuit));
 
+  peindreDepart();
+
   const km = distancePour(etat.duree * 60, etat.allure) / 1000;
   $('chercher').textContent = `Trouver trois boucles de ${km.toFixed(1)} km`;
+}
+
+/* Un point de départ mémorisé qui ne se voit pas est un piège : l'app
+   calculerait sagement des boucles autour de chez soi alors qu'on est parti
+   du bureau, sans que rien ne le dise. La ligne affiche donc toujours d'où
+   vient le départ, et son âge dès qu'il commence à dater. */
+function ageEnMots(ms) {
+  const min = Math.round(ms / 60000);
+  if (min < 2) return "à l'instant";
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const j = Math.round(h / 24);
+  return j === 1 ? 'hier' : `il y a ${j} jours`;
+}
+
+function peindreDepart() {
+  const el = $('depart-quoi');
+  el.className = 'sous';
+  const d = etat.depart;
+
+  if (!d) { el.textContent = 'pas encore défini'; return; }
+
+  if (d.source !== 'gps') { el.textContent = 'point choisi sur la carte'; return; }
+
+  const age = d.quand ? Date.now() - d.quand : null;
+  // Au-delà de 50 m, le point tombe facilement dans la rue d'à côté, et
+  // toute la boucle part du mauvais endroit sans que ça se voie.
+  const precise = !d.precision || d.precision <= 50;
+  const bouts = ['ma position'];
+  if (age !== null && age > 30 * 60000) bouts.push(ageEnMots(age));
+  if (d.precision) bouts.push(`à ${Math.round(d.precision)} m près`);
+  el.textContent = bouts.join(', ');
+
+  if (!precise) el.classList.add('faux');
+  else if (age !== null && age > 6 * 3600000) el.classList.add('vieux');
+}
+
+/* --------------------------------------------------- le parcours en cours
+
+   ⚠️ Sans ça, sortir le téléphone de sa poche en pleine course pouvait
+   rendre un écran vide : Android est libre de tuer une PWA passée en
+   arrière-plan, et l'app rouvrait alors sans le parcours qu'on était en
+   train de suivre. Le tracé choisi est donc écrit sur le disque dès qu'il
+   est choisi, pas gardé en mémoire. */
+
+function sauverParcours(b) {
+  try {
+    localStorage.setItem(CLE_PARCOURS, JSON.stringify({
+      quand: Date.now(),
+      m: b.m, feux: b.feux, rues: b.rues,
+      fractionEclairee: b.fractionEclairee,
+      // Six décimales valent environ 10 cm : au-delà on stockerait du bruit.
+      points: b.points.map(p => [+p.lat.toFixed(6), +p.lon.toFixed(6)])
+    }));
+  } catch (e) { /* stockage plein ou refusé : on continue sans filet */ }
+}
+
+function lireParcours() {
+  try {
+    const r = JSON.parse(localStorage.getItem(CLE_PARCOURS));
+    if (!r || !r.points || Date.now() - r.quand > PARCOURS_VALIDE_MS) return null;
+    return { ...r, points: r.points.map(([lat, lon]) => ({ lat, lon })), noeuds: [] };
+  } catch (e) { return null; }
 }
 
 /* ---------------------------------------------------------------- états */
@@ -100,7 +171,10 @@ function positionner() {
   return new Promise((ok, ko) => {
     if (!navigator.geolocation) return ko(new Error('nogeo'));
     navigator.geolocation.getCurrentPosition(
-      p => ok({ lat: p.coords.latitude, lon: p.coords.longitude, precision: p.coords.accuracy }),
+      p => ok({
+        lat: p.coords.latitude, lon: p.coords.longitude,
+        precision: p.coords.accuracy, source: 'gps', quand: Date.now()
+      }),
       e => ko(e),
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
     );
@@ -203,15 +277,61 @@ function message(e) {
 
 /* ----------------------------------------------------------- résultats */
 
-function montrerResultats(cible, ms) {
-  $('reglages').hidden = true;
-  $('resultats').hidden = false;
+/* OSM écrit « Avenue du Mont-Royal Est » ou « Rue Saint-Denis », avec le type
+   de voie en tête. Écrire « par Avenue du Mont-Royal » sonne faux ; il faut
+   l'article, donc le genre du type de voie, et l'élision devant une voyelle. */
+const FEMININ = new Set(['rue', 'ruelle', 'avenue', 'allée', 'allee', 'impasse', 'place',
+  'route', 'voie', 'promenade', 'esplanade', 'traverse', 'côte', 'cote', 'montée', 'montee']);
+const MASCULIN = new Set(['boulevard', 'chemin', 'passage', 'quai', 'cours', 'square',
+  'sentier', 'parc', 'pont', 'rond-point', 'mail']);
 
+function nommer(nom) {
+  const mots = nom.split(' ');
+  const type = mots[0].toLowerCase();
+  const connu = FEMININ.has(type) || MASCULIN.has(type);
+  if (!connu) return `<b>${nom}</b>`;
+
+  const reste = mots.slice(1).join(' ');
+  const article = /^[aeiouyéèêà]/i.test(type) ? 'l’' : (FEMININ.has(type) ? 'la ' : 'le ');
+  return `${article}${type} <b>${reste}</b>`;
+}
+
+/* L'attribut aria-label ne rend pas le HTML : il le lirait balise par balise. */
+const texteBrut = html => html.replace(/<[^>]+>/g, '');
+
+function montrerResultats(cible, ms) {
   $('resume').textContent =
     `${etat.boucles.length} boucles, cible ${(cible / 1000).toFixed(1)} km, ${Math.round(ms)} ms`;
+  ouvrirResultats();
+}
 
+/* Séparé de `montrerResultats` parce que le parcours restauré au lancement
+   passe par ici sans avoir ni cible ni durée de calcul à afficher. */
+function ouvrirResultats() {
+  $('reglages').hidden = true;
+  $('resultats').hidden = false;
+  peindreCartes();
+
+  const b = etat.boucles[etat.choisie];
+  sauverParcours(b);
+  // Choisir une autre boucle recommence la course : garder l'accrochage de
+  // la précédente ferait chercher la position dans un tableau de points qui
+  // n'existe plus, et le premier segment surligné serait faux.
+  indice = null;
+  derniers = [];
+  recentre = false;
+  parcouru = 0;
+  precedent = null;
+  carte.cadrer(b.points);
+  carte.montrer(b, etat.depart);
+  $('suivi').hidden = true;
+  if (document.visibilityState === 'visible') demarrerSuivi();
+}
+
+function peindreCartes() {
   const zone = $('boucles');
   zone.innerHTML = '';
+  const prises = new Set();
   etat.boucles.forEach((b, i) => {
     const el = document.createElement('button');
     el.className = 'boucle';
@@ -222,33 +342,132 @@ function montrerResultats(cible, ms) {
     const feux = b.feux === 0 ? '<b>aucun feu</b>'
                : b.feux === 1 ? '<b>1 feu</b>'
                : `<b>${b.feux} feux</b>`;
-    const eclaire = b.fractionEclairee === null
-      ? 'éclairage non renseigné'
-      : `${Math.round(b.fractionEclairee * 100)} % éclairé`;
+    // L'éclairage n'est affiché que quand il apprend quelque chose : en mode
+    // nocturne, ou quand une part notable du parcours n'est pas éclairée.
+    // « 100 % éclairé » sur les trois cartes n'aide personne à choisir et
+    // faisait déborder la ligne sur trois lignes en 360 px de large.
+    const parle = etat.nuit || b.fractionEclairee === null || b.fractionEclairee < 0.9;
+    const eclaire = !parle ? ''
+      : b.fractionEclairee === null ? ' · éclairage inconnu'
+      : ` · ${Math.round(b.fractionEclairee * 100)} % éclairé`;
 
     // Trois boucles de même longueur avec le même profil sont
-    // indiscernables sur la carte comme dans la liste. La direction est ce
-    // qui permet de choisir : on ne veut pas toujours partir du même côté.
-    // « vers le est » : l'élision se fait devant une voyelle, et seuls
-    // « est » et « ouest » sont concernés dans la rose des vents.
-    const article = /^[aeiouy]/.test(b.direction || '') ? 'l’' : 'le ';
-    const ou = b.direction ? `vers ${article}<b>${b.direction}</b> · ` : '';
+    // indiscernables dans la liste. Nommer la rue principale est ce qui
+    // permet de choisir, et c'est ainsi qu'on décrit un parcours à
+    // quelqu'un : « celle qui passe par Mont-Royal ».
+    // La première rue que les autres boucles n'ont pas déjà prise.
+    const rue = (b.rues || []).find(r => !prises.has(r.nom)) || (b.rues || [])[0] || null;
+    if (rue) prises.add(rue.nom);
+    const par = rue ? `par ${nommer(rue.nom)}` : '';
 
     el.innerHTML =
       `<span class="km">${(b.m / 1000).toFixed(2)} km</span>` +
-      `<span class="detail">${ou}${feux}<br>environ ${minutes} min · ${eclaire}</span>` +
+      `<span class="detail">${par}<br>${feux} · ${minutes} min${eclaire}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
-      `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres ${b.direction ? 'vers ' + article + b.direction : ''}, ` +
-      `${b.feux} feu${b.feux > 1 ? 'x' : ''}, environ ${minutes} minutes`);
-    el.addEventListener('click', () => { etat.choisie = i; montrerResultats(cible, ms); });
+      `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
+      (rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
+      `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}, environ ${minutes} minutes`);
+    el.addEventListener('click', () => { etat.choisie = i; ouvrirResultats(); });
     zone.appendChild(el);
   });
-
-  const b = etat.boucles[etat.choisie];
-  carte.cadrer(b.points);
-  carte.montrer(b, etat.depart);
 }
+
+/* ------------------------------------------------------- suivi en direct
+
+   Le GPS ne tourne QUE pendant que l'app est ouverte et visible. C'est la
+   seule chose qu'un PWA sait faire, et c'est exactement le geste visé :
+   sortir le téléphone à un carrefour pour savoir de quel côté ça continue.
+   Il s'arrête dès que la page passe en arrière-plan, sinon on viderait la
+   batterie d'une poche. */
+
+let veille = null;
+let indice = null;
+let derniers = [];
+let sens = 1;
+let recentre = false;
+let parcouru = 0;        // mètres réellement avancés depuis le début du suivi
+let precedent = null;
+
+/* En dessous, on considère qu'on n'est pas encore parti.
+   ⚠️ Sans ce garde-fou, l'app annonce « Encore 0 m » à celle qui se tient sur
+   sa ligne de départ : le premier et le dernier point du tracé sont le MÊME
+   carrefour, et rien dans une position isolée ne dit si on l'aborde au
+   départ ou à l'arrivée. Seul le chemin déjà parcouru le dit. */
+const DEMARRE_M = 120;
+
+function demarrerSuivi() {
+  if (veille !== null || !navigator.geolocation) return;
+  if (!etat.boucles.length) return;
+  recentre = false;
+  parcouru = 0;
+  precedent = null;
+  veille = navigator.geolocation.watchPosition(surPosition, () => {}, {
+    enableHighAccuracy: true, maximumAge: 2000, timeout: 30000
+  });
+}
+
+function arreterSuivi() {
+  if (veille === null) return;
+  navigator.geolocation.clearWatch(veille);
+  veille = null;
+  indice = null;
+  derniers = [];
+}
+
+function surPosition(p) {
+  const b = etat.boucles[etat.choisie];
+  if (!b) return;
+  const moi = { lat: p.coords.latitude, lon: p.coords.longitude };
+
+  // Le cumul sert uniquement à savoir si la course a commencé, pas à mesurer
+  // une distance : le bruit GPS le gonflerait, ce qui est sans importance ici
+  // puisqu'on ne compare qu'à un seuil de 120 m.
+  if (precedent) {
+    const dx = (moi.lon - precedent.lon) * 111320 * Math.cos(moi.lat * Math.PI / 180);
+    const dy = (moi.lat - precedent.lat) * 111320;
+    parcouru += Math.hypot(dx, dy);
+  }
+  precedent = moi;
+
+  const a = accrocher(b.points, moi, indice);
+  const ligne = $('suivi');
+  ligne.hidden = false;
+
+  if (!a || a.ecartM > ECART_MAX_M) {
+    // Mieux vaut dire qu'on ne sait pas que de surligner une direction au
+    // hasard : c'est exactement le moment où on suivrait le mauvais côté.
+    carte.suivre(moi, null);
+    ligne.className = 'pied dehors';
+    ligne.innerHTML = `Vous êtes à <b>${Math.round(a ? a.ecartM : 0)} m</b> du parcours.`;
+    if (!recentre) { carte.centrerSur(moi); recentre = true; }
+    return;
+  }
+
+  indice = a.indice;
+  derniers.push(a.indice);
+  if (derniers.length > 6) derniers.shift();
+  sens = sensDeMarche(derniers, b.points.length, sens);
+
+  carte.suivre(moi, segmentSuivant(b.points, indice, sens, 400));
+  if (!recentre) { carte.centrerSur(moi); recentre = true; }
+
+  const reste = parcouru < DEMARRE_M ? b.m : metresRestants(b.points, indice, sens);
+  ligne.className = 'pied';
+  ligne.innerHTML = reste >= 1000
+    ? `Encore <b>${(reste / 1000).toFixed(2)} km</b> · le vert montre les 400 prochains mètres`
+    : `Encore <b>${reste} m</b> · le vert montre la suite`;
+}
+
+/* Une page cachée n'a pas besoin du GPS, et un PWA qu'on rouvre doit le
+   reprendre : l'événement est le seul signal fiable des deux côtés. */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (!$('resultats').hidden) demarrerSuivi();
+  } else {
+    arreterSuivi();
+  }
+});
 
 /* -------------------------------------------------------------- branche */
 
@@ -266,11 +485,38 @@ $('opt-nuit').addEventListener('click', () => {
   etat.nuit = !etat.nuit; ecrireReglages(); peindreReglages();
   etat.grapheDe = null;
 });
+$('ma-position').addEventListener('click', async () => {
+  const b = $('ma-position');
+  b.disabled = true;
+  dire('Recherche de votre position...');
+  try {
+    const avant = etat.depart;
+    etat.depart = await positionner();
+    ecrireReglages();
+    peindreDepart();
+
+    // Un départ qui bouge périme les boucles affichées et, s'il sort de la
+    // zone chargée, le graphe lui-même.
+    const bouge = !avant ||
+      Math.abs(avant.lat - etat.depart.lat) > 1e-5 || Math.abs(avant.lon - etat.depart.lon) > 1e-5;
+    if (bouge) { etat.boucles = []; etat.choisie = 0; $('resultats').hidden = true; $('reglages').hidden = false; }
+    carte.montrer(null, etat.depart);
+    direUnMoment(etat.depart.precision > 50
+      ? `Position trouvée, mais à ${Math.round(etat.depart.precision)} m près seulement.`
+      : 'Position trouvée.');
+  } catch (e) {
+    dire(message(e), true);
+  } finally {
+    b.disabled = false;
+  }
+});
+
 $('chercher').addEventListener('click', () => chercher(false));
 $('autres').addEventListener('click', () => chercher(true));
 $('retour').addEventListener('click', () => {
   $('resultats').hidden = true;
   $('reglages').hidden = false;
+  arreterSuivi();
 });
 
 /* Une pression brève sur la carte déplace le départ. Le déplacement et le
@@ -292,8 +538,9 @@ $('retour').addEventListener('click', () => {
     const { largeur, hauteur } = carte.taille();
     const x = carte.centre.x + ((e.clientX - r.left) - largeur / 2) / carte.echelle;
     const y = carte.centre.y + ((e.clientY - r.top) - hauteur / 2) / carte.echelle;
-    etat.depart = carte.versLatLon(x, y);
+    etat.depart = { ...carte.versLatLon(x, y), source: 'carte', quand: Date.now() };
     ecrireReglages();
+    peindreDepart();
 
     // Les boucles affichées partaient de l'ANCIEN point : les garder à
     // l'écran montrerait un tracé qui ne passe plus par le départ, ce qui
@@ -310,6 +557,34 @@ $('retour').addEventListener('click', () => {
 lireReglages();
 peindreReglages();
 if (etat.depart) carte.montrer(null, etat.depart);
+
+/* Rouvrir l'app en pleine course doit retrouver le parcours, pas l'écran de
+   réglages : Android est libre de tuer une PWA restée en poche. */
+const enCoursDeCourse = lireParcours();
+if (enCoursDeCourse) {
+  etat.boucles = [enCoursDeCourse];
+  etat.choisie = 0;
+  $('resume').textContent = 'Parcours en cours';
+  ouvrirResultats();
+  redessinerLesRues(enCoursDeCourse);
+}
+
+/* Le tracé seul sur du noir ne dit pas grand-chose : ce qu'on cherche en
+   sortant le téléphone, c'est « je suis à quelle rue ». Les tuiles sont déjà
+   en mémoire, on refait donc le graphe pour dessiner le quartier.
+   ⚠️ Sans réseau et sans blocage : le parcours et la position sont déjà à
+   l'écran, et un quartier absent du cache ne doit rien retarder. */
+async function redessinerLesRues(b) {
+  try {
+    const centre = etat.depart || b.points[0];
+    const osm = await chargerDuCache(bbox(centre, rayonPour(b.m)));
+    if (!osm) return;
+    etat.graphe = plusGrandeComposante(
+      construireGraphe(osm, { nuit: etat.nuit, eviterFeux: etat.eviterFeux }));
+    carte.charger(etat.graphe, carte.origine || centre);
+    carte.dessiner();
+  } catch (e) { /* la carte reste sans fond, le parcours reste juste */ }
+}
 
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
