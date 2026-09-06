@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#101215">
+<link rel="manifest" href="diag.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>Runa : banc d'essai GPS</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px calc(16px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    background: #101215; color: #e8eaed;
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 4px; letter-spacing: .02em; }
+  .sub { color: #8b9299; font-size: .82rem; margin: 0 0 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .cell { background: #191c21; border-radius: 10px; padding: 10px 12px; }
+  .cell .k { color: #8b9299; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; }
+  .cell .v { font-size: 1.5rem; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .cell .v small { font-size: .8rem; color: #8b9299; }
+  .wide { grid-column: 1 / -1; }
+  .wide .v { font-size: 1.05rem; }
+  .v.ok { color: #6ee7a0; } .v.bad { color: #ff7b72; } .v.warn { color: #ffc457; }
+  button {
+    font: inherit; font-weight: 600; color: #101215; background: #6ee7a0;
+    border: 0; border-radius: 12px; min-height: 52px; padding: 0 18px; width: 100%;
+    margin-bottom: 8px; -webkit-tap-highlight-color: transparent;
+  }
+  button.sec { background: #262b31; color: #e8eaed; min-height: 46px; font-weight: 500; }
+  button[disabled] { opacity: .35; }
+  .row { display: flex; gap: 8px; }
+  h2 { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: #8b9299; margin: 18px 0 6px; }
+  ul { margin: 0; padding-left: 18px; font-size: .86rem; }
+  #gaps li { margin-bottom: 4px; }
+  pre {
+    background: #0a0c0e; border-radius: 10px; padding: 10px; font-size: .68rem;
+    line-height: 1.4; max-height: 42vh; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    margin: 0; color: #b7bec5;
+  }
+  .none { color: #6b7278; font-size: .86rem; font-style: italic; }
+  #alerte {
+    display: none; background: #4a1d1a; border: 1px solid #ff7b72; color: #ffd7d4;
+    border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; font-size: .9rem;
+  }
+  #alerte b { display: block; color: #ff7b72; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Runa : banc d'essai GPS</h1>
+<p class="sub">Mesure ce que ton téléphone fait vraiment pendant une course. Rien n'est envoyé nulle part, tout reste dans le navigateur.</p>
+
+<div class="grid">
+  <div class="cell wide"><div class="k">Écran maintenu allumé</div><div class="v" id="wake">pas démarré</div></div>
+  <div class="cell"><div class="k">Temps écoulé</div><div class="v" id="elapsed">0<small> s</small></div></div>
+  <div class="cell"><div class="k">Secondes vécues</div><div class="v" id="ticks">0<small> s</small></div></div>
+  <div class="cell"><div class="k">Points GPS</div><div class="v" id="fixes">0</div></div>
+  <div class="cell"><div class="k">Dernier point</div><div class="v" id="last">--</div></div>
+  <div class="cell"><div class="k">Précision (dern.)</div><div class="v" id="acc">--</div></div>
+  <div class="cell"><div class="k">Précision (pire)</div><div class="v" id="accmax">--</div></div>
+</div>
+
+<button id="start">Démarrer la mesure</button>
+<div class="row">
+  <button class="sec" id="stop" disabled>Arrêter</button>
+  <button class="sec" id="copy">Copier le rapport</button>
+</div>
+<button class="sec" id="clear">Effacer et repartir de zéro</button>
+
+<h2>Trous détectés</h2>
+<ul id="gaps"><li class="none">aucun pour l'instant</li></ul>
+
+<h2>Journal</h2>
+<pre id="log">En attente.</pre>
+
+<script type="module">
+const KEY = 'runa-diag-v1';
+const $ = id => document.getElementById(id);
+
+// L'état survit à une mise à mort de la page par le système : c'est exactement
+// ce qu'on cherche à mesurer, donc on ne peut pas le garder qu'en mémoire.
+const empty = () => ({
+  started: 0, stopped: 0, ticks: 0, lastTick: 0, lastFix: 0, fixes: 0,
+  accs: [], gaps: [], log: [], wake: 'pas démarré', gapOpen: false,
+  standalone: null, ua: navigator.userAgent
+});
+
+let S = load();
+let watchId = null, timer = null;
+
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return Object.assign(empty(), JSON.parse(raw));
+  } catch (e) { /* stockage refusé : on mesure quand même, sans survie */ }
+  return empty();
+}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
+
+function log(msg) {
+  const t = S.started ? ((Date.now() - S.started) / 1000).toFixed(1).padStart(6) : '  --  ';
+  S.log.push(t + 's ' + msg);
+  if (S.log.length > 3000) S.log.splice(0, 500);
+}
+
+const fmt = ms => ms >= 60000 ? Math.round(ms / 60000) + ' min' : (ms / 1000).toFixed(1) + ' s';
+
+function render() {
+  $('wake').textContent = S.wake;
+  $('wake').className = 'v ' + (S.wake === 'actif' ? 'ok' : S.wake === 'pas démarré' ? '' : 'bad');
+
+  const el = S.started ? ((S.stopped || Date.now()) - S.started) / 1000 : 0;
+  $('elapsed').innerHTML = Math.round(el) + '<small> s</small>';
+  $('ticks').innerHTML = S.ticks + '<small> s</small>';
+
+  // Si la page a été gelée, les secondes vécues décrochent du temps réel.
+  const drift = el - S.ticks;
+  $('ticks').className = 'v ' + (!S.started ? '' : drift > 5 ? 'bad' : drift > 2 ? 'warn' : 'ok');
+
+  $('fixes').textContent = S.fixes;
+  $('fixes').className = 'v ' + (!S.started ? '' : S.fixes === 0 ? 'bad' : 'ok');
+
+  const since = S.lastFix ? Date.now() - S.lastFix : 0;
+  $('last').innerHTML = S.lastFix ? Math.round(since / 1000) + '<small> s</small>' : '--';
+  $('last').className = 'v ' + (!S.lastFix ? '' : since > 15000 ? 'bad' : since > 6000 ? 'warn' : 'ok');
+
+  const a = S.accs;
+  $('acc').innerHTML = a.length ? Math.round(a[a.length - 1]) + '<small> m</small>' : '--';
+  $('accmax').innerHTML = a.length ? Math.round(Math.max.apply(null, a)) + '<small> m</small>' : '--';
+  if (a.length) {
+    const last = a[a.length - 1];
+    $('acc').className = 'v ' + (last <= 15 ? 'ok' : last <= 35 ? 'warn' : 'bad');
+  }
+
+  $('gaps').innerHTML = S.gaps.length
+    ? S.gaps.map(g => '<li><b>' + g.type + '</b> : ' + fmt(g.ms) + ' à ' +
+        new Date(g.at).toLocaleTimeString('fr-FR') + '</li>').join('')
+    : '<li class="none">aucun pour l&rsquo;instant</li>';
+
+  $('log').textContent = S.log.length ? S.log.slice(-200).join('\n') : 'En attente.';
+}
+
+function tick() {
+  const now = Date.now();
+  // Un setInterval ne bat plus quand le système gèle la page. L'écart entre
+  // deux battements dit donc si la page a survécu, indépendamment du GPS :
+  // sans lui, « plus aucun point » resterait ambigu.
+  if (S.lastTick && now - S.lastTick > 3000) {
+    S.gaps.push({ type: 'page gelée', ms: now - S.lastTick, at: S.lastTick });
+    log('PAGE GELÉE pendant ' + fmt(now - S.lastTick) + ' (le système a suspendu l’app)');
+  }
+  S.lastTick = now;
+  S.ticks++;
+  if (S.lastFix && now - S.lastFix > 12000 && !S.gapOpen) {
+    S.gapOpen = true;
+    log('aucun point GPS depuis ' + fmt(now - S.lastFix) + ' alors que la page tourne');
+  }
+  save();
+  render();
+}
+
+function onFix(p) {
+  const now = Date.now();
+  if (S.lastFix && now - S.lastFix > 12000) {
+    S.gaps.push({ type: 'GPS muet', ms: now - S.lastFix, at: S.lastFix });
+    log('GPS muet pendant ' + fmt(now - S.lastFix));
+  }
+  S.gapOpen = false;
+  S.lastFix = now;
+  S.fixes++;
+  const c = p.coords;
+  S.accs.push(c.accuracy);
+  if (S.accs.length > 5000) S.accs.splice(0, 1000);
+  log('fix ' + c.latitude.toFixed(6) + ',' + c.longitude.toFixed(6) +
+      ' +-' + Math.round(c.accuracy) + 'm' +
+      ' v=' + (c.speed == null ? '--' : c.speed.toFixed(2) + 'm/s'));
+  save();
+  render();
+}
+
+function onFixError(e) {
+  log('ERREUR GPS ' + e.code + ' : ' + e.message);
+  save();
+  render();
+}
+
+async function acquireWake() {
+  if (!('wakeLock' in navigator)) { S.wake = 'non supporté par ce navigateur'; return; }
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    S.wake = 'actif';
+    log('verrou écran obtenu');
+    lock.addEventListener('release', () => { log('verrou écran relâché par le système'); save(); });
+  } catch (e) {
+    S.wake = 'refusé : ' + e.name;
+    log('verrou écran REFUSÉ : ' + e.message);
+  }
+}
+
+async function start() {
+  S = empty();
+  S.started = Date.now();
+  S.lastTick = Date.now();
+  S.standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  log('départ. lancé depuis l’écran d’accueil : ' + (S.standalone ? 'oui' : 'non (onglet navigateur)'));
+  log('contexte sécurisé : ' + (window.isSecureContext ? 'oui' : 'NON, la géolocalisation sera refusée'));
+  await acquireWake();
+  watchId = navigator.geolocation.watchPosition(onFix, onFixError, {
+    enableHighAccuracy: true, maximumAge: 0, timeout: 30000
+  });
+  timer = setInterval(tick, 1000);
+  $('start').disabled = true;
+  $('stop').disabled = false;
+  save();
+  render();
+}
+
+function stop() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  clearInterval(timer);
+  watchId = null;
+  timer = null;
+  S.stopped = Date.now();
+  log('arrêt manuel');
+  $('start').disabled = false;
+  $('stop').disabled = true;
+  save();
+  render();
+}
+
+document.addEventListener('visibilitychange', async () => {
+  log('visibilité : ' + document.visibilityState);
+  if (document.visibilityState === 'visible' && S.started && !S.stopped) await acquireWake();
+  save();
+  render();
+});
+window.addEventListener('pagehide', () => { log('pagehide'); save(); });
+window.addEventListener('freeze', () => { log('freeze'); save(); });
+window.addEventListener('resume', () => { log('resume'); save(); });
+
+$('start').addEventListener('click', start);
+$('stop').addEventListener('click', stop);
+
+$('clear').addEventListener('click', () => {
+  if (watchId !== null) stop();
+  S = empty();
+  save();
+  render();
+});
+
+$('copy').addEventListener('click', async () => {
+  const el = S.started ? ((S.stopped || Date.now()) - S.started) / 1000 : 0;
+  const a = S.accs;
+  const txt = [
+    'Runa banc d’essai GPS',
+    S.ua,
+    'lancé depuis l’écran d’accueil : ' + S.standalone,
+    'verrou écran : ' + S.wake,
+    'temps écoulé ' + Math.round(el) + ' s / secondes vécues ' + S.ticks + ' s',
+    'points GPS : ' + S.fixes,
+    a.length ? 'précision min/pire : ' + Math.round(Math.min.apply(null, a)) + ' / ' +
+               Math.round(Math.max.apply(null, a)) + ' m' : 'aucune précision relevée',
+    'trous : ' + (S.gaps.length ? S.gaps.map(g => g.type + ' ' + fmt(g.ms)).join(', ') : 'aucun'),
+    '', '--- journal ---'
+  ].concat(S.log).join('\n');
+  try {
+    await navigator.clipboard.writeText(txt);
+    $('copy').textContent = 'copié';
+  } catch (e) {
+    $('copy').textContent = 'copie refusée, fais une capture';
+  }
+  setTimeout(() => { $('copy').textContent = 'Copier le rapport'; }, 2000);
+});
+
+// Retrouver une mesure non arrêtée au chargement veut dire que la page a été
+// tuée pendant qu'elle tournait : c'est le résultat le plus important du test.
+if (S.started && !S.stopped) {
+  log('page rechargée alors que la mesure tournait : le système avait tué l’app');
+  S.stopped = Date.now();
+  save();
+}
+render();
+</script>
+</body>
+</html>

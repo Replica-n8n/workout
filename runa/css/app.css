@@ -1,0 +1,222 @@
+/* Runa · feuille unique, aucune police distante, aucun CDN.
+   Une maquette qui charge sa mise en forme depuis le réseau s'affiche nue
+   dès qu'on est hors ligne, et c'est exactement ce qu'on veut éviter dans
+   une app qu'on ouvre dehors. */
+
+:root {
+  color-scheme: dark;
+  --fond: #101215;
+  --carte: #0d0f12;
+  --panneau: #171a1f;
+  --case: #21262d;
+  --case-active: #2c333c;
+  --trait: #2a3038;
+  --texte: #e8eaed;
+  --gris: #8b9299;
+  --vert: #6ee7a0;
+  --rouge: #ff7b72;
+  --jaune: #ffc457;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  display: flex;
+  flex-direction: column;
+  /* `height` et non `min-height` : avec min-height la page grandit et le
+     bouton principal glisse sous la ligne de flottaison. */
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ---------------------------------------------------------------- carte */
+
+#carte {
+  flex: 1;
+  min-height: 0;          /* sans ça, la carte pousse le panneau dehors */
+  width: 100%;
+  display: block;
+  touch-action: none;     /* on gère nous-mêmes le déplacement */
+  background: var(--carte);
+}
+
+#etat {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 12px;
+  right: 12px;
+  background: rgba(23, 26, 31, .93);
+  border: 1px solid var(--trait);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: .88rem;
+  color: var(--gris);
+}
+#etat[hidden] { display: none; }
+#etat.erreur { color: var(--rouge); border-color: var(--rouge); }
+
+/* -------------------------------------------------------------- panneau */
+
+#panneau {
+  background: var(--panneau);
+  border-top: 1px solid var(--trait);
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.titre {
+  font-size: .7rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--gris);
+  margin: 0;
+}
+
+/* Les durées : des options nommées et visibles, pas un curseur qu'il faut
+   viser au pixel près à une main. */
+.chips { display: flex; gap: 6px; }
+.chip {
+  flex: 1;
+  min-height: 46px;
+  border: 1px solid var(--trait);
+  background: var(--case);
+  color: var(--texte);
+  border-radius: 10px;
+  font: 600 .95rem/1 inherit;
+  font-variant-numeric: tabular-nums;
+}
+.chip[aria-pressed="true"] {
+  background: var(--vert);
+  border-color: var(--vert);
+  color: #0d0f12;
+}
+
+.ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+}
+.ligne .nom { flex: 1; }
+.ligne .val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  min-width: 76px;
+  text-align: right;
+}
+.rond {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  border: 1px solid var(--trait);
+  background: var(--case);
+  color: var(--texte);
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+/* Une option est une ligne nommée avec une coche, pas un interrupteur muet :
+   on doit lire ce qu'on active. */
+.option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  width: 100%;
+  background: none;
+  border: 0;
+  color: var(--texte);
+  font: inherit;
+  text-align: left;
+  padding: 0;
+}
+.option .coche {
+  width: 26px; height: 26px;
+  flex: 0 0 26px;
+  border-radius: 7px;
+  border: 1px solid var(--trait);
+  background: var(--case);
+  display: grid;
+  place-items: center;
+  font-size: .95rem;
+  color: transparent;
+}
+.option[aria-pressed="true"] .coche {
+  background: var(--vert);
+  border-color: var(--vert);
+  color: #0d0f12;
+}
+.option .sous { display: block; font-size: .78rem; color: var(--gris); }
+
+button.principal {
+  min-height: 54px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--vert);
+  color: #0d0f12;
+  font: 700 1rem/1 inherit;
+  width: 100%;
+}
+button.principal:disabled { opacity: .4; }
+
+button.secondaire {
+  min-height: 46px;
+  border: 1px solid var(--trait);
+  border-radius: 11px;
+  background: var(--case);
+  color: var(--texte);
+  font: 500 .95rem/1 inherit;
+  padding: 0 14px;
+}
+
+/* ------------------------------------------------------------ résultats */
+
+#boucles { display: flex; flex-direction: column; gap: 8px; }
+
+.boucle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--trait);
+  border-radius: 12px;
+  background: var(--case);
+  color: var(--texte);
+  font: inherit;
+  text-align: left;
+}
+.boucle[aria-pressed="true"] {
+  border-color: var(--vert);
+  background: var(--case-active);
+}
+.boucle .km {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 86px;
+}
+.boucle .detail { flex: 1; font-size: .82rem; color: var(--gris); line-height: 1.35; }
+.boucle .detail b { color: var(--texte); font-weight: 600; }
+.boucle .puce {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--trait);
+}
+.boucle[aria-pressed="true"] .puce { background: var(--vert); border-color: var(--vert); }
+
+.rangee { display: flex; gap: 8px; }
+.rangee > * { flex: 1; }
+
+.pied { font-size: .76rem; color: var(--gris); text-align: center; margin: 0; }

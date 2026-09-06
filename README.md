@@ -7,6 +7,7 @@ aucun outil de build. Chaque app est une PWA autonome qui fonctionne hors ligne.
 |---|---|---|
 | [`la-cour/`](la-cour/) | **La Cour** | Calisthénie au poids de corps, dérivée de l'entraînement des prisons mexicaines et corrigée selon la littérature actuelle sur l'hypertrophie. |
 | [`gvt/`](gvt/) | **GVT Tracker** | German Volume Training : charge à 60 % du 1RM, séries cochées une à une, repos chronométré. |
+| [`runa/`](runa/) | **Runa** | Course à pied en ville : un générateur de boucles qui part de chez soi, revient au départ et évite les feux rouges. |
 
 ## Ajouter une app
 
@@ -227,6 +228,94 @@ Elle ne garde ni historique, ni charge par exercice, ni progression d'une
 séance à l'autre. Elle coche des séries et compte un repos. Le 1RM saisi vaut
 pour toute la séance, ce qui suppose que les mouvements d'une même séance se
 chargent pareil : c'est faux dès qu'on compare un squat et des mollets.
+
+---
+
+## Runa
+
+### Le principe
+
+Toutes les apps de course sont pensées pour le trail ou la route de campagne.
+Runa est pensée pour le bitume. On lui donne une durée et une allure, elle
+propose **trois boucles** qui repartent de chez soi et y reviennent, en
+choisissant les petites rues plutôt que les grands axes et en contournant les
+feux rouges.
+
+### Pourquoi ça n'est pas un simple calculateur d'itinéraire
+
+Le coût d'un tronçon n'est pas sa longueur, c'est sa longueur corrigée :
+
+| Ce qu'on traverse | Ce que ça coûte |
+|---|---|
+| un feu tricolore | 25 m de plus |
+| un grand axe sans trottoir déclaré | 1,8 fois la distance |
+| une rue non éclairée, en mode nocturne | 2,5 fois la distance |
+| des escaliers | 3 fois la distance |
+| des pavés | 1,25 fois la distance |
+
+Mesuré sur de vraies données OpenStreetMap, sur 540 boucles générées à Paris
+et à Lyon : **sans cette pondération, un parcours traverse 1,4 feu par
+kilomètre ; avec, il en traverse 0,04 à 0,15.** Un planificateur ordinaire
+fait d'ailleurs pire que le hasard, parce qu'il suit les grands axes, et que
+c'est exactement là que sont les feux.
+
+### Une carte sans fournisseur de tuiles
+
+Pas de MapLibre, pas de clé d'API, pas de CDN. La géométrie de toutes les rues
+du quartier est déjà téléchargée pour pouvoir y calculer un itinéraire : la
+dessiner ne coûte qu'un tracé de plus. La carte fonctionne donc exactement là
+où le générateur fonctionne, y compris en avion.
+
+Ce qu'on y perd : ni bâtiments, ni relief, ni commerces. Des rues, et le tracé.
+
+### Ce qui empêche une fausse boucle
+
+Une boucle à la bonne distance peut n'être qu'un aller-retour. Trois garde-fous
+se cumulent, et le premier est le plus efficace :
+
+1. Les points intermédiaires ne sont tirés que sur de **vrais carrefours**
+   (degré 3 au moins) : viser un cul-de-sac oblige à faire demi-tour.
+2. Les demi-tours résiduels sont **effacés du tracé** : passer par a, b, a ne
+   sert à rien et gonfle la distance annoncée de mètres que personne ne veut
+   courir deux fois.
+3. Un tracé dont plus de 20 % longe son propre tracé à moins de 30 m est
+   rejeté. Seuil lu dans les données, pas choisi au jugé.
+
+Effet mesuré : la part de tracé qui se longe elle-même passe d'une médiane de
+12 % à 5 %, et son 90e centile de 25 % à 9 %.
+
+### La structure
+
+```
+runa/
+  index.html            l'app
+  diag.html             banc d'essai GPS, gardé pour mesurer la précision réelle
+  lib/                  aucune entrée-sortie, aucun `window`, testé par node --test
+    geo.js              distances, caps, boîtes englobantes
+    graph.js            le graphe pondéré, toutes les pénalités
+    route.js            A* sur ce graphe
+    loop.js             le générateur de boucles
+    overpass.js         la requête et le découpage en tuiles
+  js/                   tout ce qui touche au navigateur
+    donnees.js          téléchargement et cache IndexedDB par tuile
+    carte.js            la carte, sur un canvas
+    app.js              l'assemblage, aucun calcul
+  tests/                42 tests, `npm test` ou `node --test tests/*.test.js`
+```
+
+### Le réseau, et quand il sert
+
+Le **premier** parcours dans un quartier télécharge ses rues depuis Overpass :
+environ 6 Mo et une minute. Ensuite tout est en mémoire pour trente jours, et
+plus rien ne sort. C'est la seule app du dépôt qui a besoin du réseau, et elle
+n'en a besoin qu'une fois par quartier, jamais pendant la course.
+
+### Ce que l'app ne fait pas
+
+Elle **n'enregistre pas les courses**. Aucune API web ne donne accès au GPS en
+arrière-plan, sur aucune plateforme : une PWA dont l'écran s'éteint perd son
+tracé. L'allure corrigée et l'exploration du quartier, qui ont besoin de traces
+enregistrées, attendent donc une coquille native.
 
 ---
 

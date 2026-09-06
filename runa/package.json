@@ -1,0 +1,9 @@
+{
+  "name": "runa",
+  "private": true,
+  "type": "module",
+  "//": "Trois lignes, aucune dependance, aucun outil de build : ce fichier ne sert qu'a une chose, dire a Node que les .js du dossier sont des modules ES. Sans lui, `node --test` refuse les `import` et il faudrait renommer la lib en .mjs, que GitHub Pages sert avec un mauvais type MIME. Le navigateur, lui, ignore completement ce fichier.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
