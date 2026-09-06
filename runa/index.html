@@ -40,9 +40,9 @@
 
     <div class="ligne">
       <span class="nom">Allure</span>
-      <button class="rond" id="allure-moins" aria-label="Allure plus lente">&minus;</button>
+      <button class="rond" id="allure-moins" aria-label="Dix secondes de moins au kilomètre">&minus;</button>
       <span class="val" id="allure-val">6:00</span>
-      <button class="rond" id="allure-plus" aria-label="Allure plus rapide">+</button>
+      <button class="rond" id="allure-plus" aria-label="Dix secondes de plus au kilomètre">+</button>
     </div>
 
     <button class="option" id="opt-feux" aria-pressed="true">
@@ -62,13 +62,22 @@
   </div>
 
   <div id="resultats" hidden>
-    <p class="titre" id="resume"></p>
-    <div id="boucles"></div>
-    <p class="pied" id="suivi" hidden></p>
-    <div class="rangee" style="margin-top:10px">
-      <button class="secondaire" id="autres">Trois autres</button>
-      <button class="secondaire" id="retour">Réglages</button>
+
+    <div id="choix">
+      <p class="titre" id="resume"></p>
+      <div id="boucles"></div>
+      <button class="principal" id="suivre">Suivre ce parcours</button>
+      <div class="rangee">
+        <button class="secondaire" id="autres">Trois autres</button>
+        <button class="secondaire" id="retour">Réglages</button>
+      </div>
     </div>
+
+    <div id="course" hidden>
+      <p id="suivi"></p>
+      <button class="secondaire" id="quitter">Changer de parcours</button>
+    </div>
+
   </div>
 
 </section>

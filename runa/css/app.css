@@ -250,6 +250,7 @@ button.secondaire {
 
 /* ------------------------------------------------------------ résultats */
 
+#choix { display: flex; flex-direction: column; gap: 10px; }
 #boucles { display: flex; flex-direction: column; gap: 8px; }
 
 .boucle {
@@ -284,14 +285,26 @@ button.secondaire {
 }
 .boucle[aria-pressed="true"] .puce { background: var(--vert); border-color: var(--vert); }
 
-.rangee { display: flex; gap: 8px; }
+.rangee { display: flex; gap: 8px; margin-top: 8px; }
 .rangee > * { flex: 1; }
 
 .pied { font-size: .76rem; color: var(--gris); text-align: center; margin: 0; }
-#suivi { margin-top: 8px; font-size: .84rem; }
+/* En course, ce qui reste à courir devient l'information principale de
+   l'écran : c'est le seul chiffre qu'on lit en une seconde, bras tendu. */
+#course { display: flex; flex-direction: column; gap: 10px; }
+#course[hidden], #choix[hidden] { display: none; }
+
+#suivi { margin: 0; font-size: 1.05rem; color: var(--gris); text-align: center; }
 #suivi.dehors { color: var(--jaune); }
-#suivi b { color: var(--texte); font-variant-numeric: tabular-nums; }
-#suivi[hidden] { display: none; }
+#suivi b {
+  color: var(--texte);
+  font-variant-numeric: tabular-nums;
+  font-size: 2rem;
+  font-weight: 700;
+  display: block;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
 
 /* Le filet de sécurité : ce qui s'affiche quand le module principal n'a pas
    pu démarrer. Sans lui, l'app reste un HTML mort dont aucun bouton ne

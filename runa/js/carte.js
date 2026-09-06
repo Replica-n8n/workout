@@ -294,13 +294,23 @@ export class Carte {
          daltonien, ni à bout de bras, ni essoufflée. Elle dit le SENS, ce
          que la couleur ne peut pas dire. */
       if (this.pointe) {
+        /* ⚠️ Première version faussée : les deux coins de la base étaient
+           placés à un rayon fixe et à ± 2,5 radians de la pointe, donc EN
+           ARRIÈRE du dernier point. Le bout arrondi du trait, large de sept
+           pixels, dépassait entre les deux côtés du triangle et dessinait une
+           encoche : la flèche avait l'air cassée.
+
+           La base se pose maintenant exactement sur le dernier point, en
+           travers, et sa demi-largeur dépasse le rayon du bout arrondi : le
+           trait est entièrement recouvert. */
         const { x, y, ang } = this.pointe;
-        const r = 13 / e, l = 8 / e;
+        const dx = Math.cos(ang), dy = Math.sin(ang);
+        const longueur = 15 / e, demiBase = 9.5 / e;
         ctx.fillStyle = SUITE;
         ctx.beginPath();
-        ctx.moveTo(x + Math.cos(ang) * r, y + Math.sin(ang) * r);
-        ctx.lineTo(x + Math.cos(ang + 2.5) * l, y + Math.sin(ang + 2.5) * l);
-        ctx.lineTo(x + Math.cos(ang - 2.5) * l, y + Math.sin(ang - 2.5) * l);
+        ctx.moveTo(x + dx * longueur, y + dy * longueur);
+        ctx.lineTo(x - dy * demiBase, y + dx * demiBase);
+        ctx.lineTo(x + dy * demiBase, y - dx * demiBase);
         ctx.closePath();
         ctx.fill();
       }

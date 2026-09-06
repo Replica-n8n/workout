@@ -33,6 +33,7 @@ const etat = {
   grapheDe: null,       // le départ pour lequel le graphe a été construit
   boucles: [],
   choisie: 0,
+  enCourse: false,
   graine: 1
 };
 
@@ -131,9 +132,11 @@ function peindreDepart() {
    est choisi, pas gardé en mémoire. */
 
 function sauverParcours(b) {
+  if (!b) { try { localStorage.removeItem(CLE_PARCOURS); } catch (e) {} return; }
   try {
     localStorage.setItem(CLE_PARCOURS, JSON.stringify({
       quand: Date.now(),
+      enCourse: !!etat.enCourse,
       m: b.m, feux: b.feux, rues: b.rues,
       fractionEclairee: b.fractionEclairee,
       // Six décimales valent environ 10 cm : au-delà on stockerait du bruit.
@@ -305,18 +308,17 @@ async function chercher(nouvelleGraine) {
     dire('Calcul des boucles...');
     if (nouvelleGraine) etat.graine = (etat.graine + 1) % 100000;
 
-    const t0 = performance.now();
     etat.boucles = genererBoucles(etat.graphe, {
       depart: etat.depart,
       distanceCible: cible,
       graine: etat.graine
     });
-    const ms = performance.now() - t0;
 
     if (!etat.boucles.length) throw new Error('rien');
 
     etat.choisie = 0;
-    montrerResultats(cible, ms);
+    etat.enCourse = false;
+    montrerResultats(cible);
     dire(null);
   } catch (e) {
     direUneErreur(message(e));
@@ -364,9 +366,12 @@ function nommer(nom) {
 /* L'attribut aria-label ne rend pas le HTML : il le lirait balise par balise. */
 const texteBrut = html => html.replace(/<[^>]+>/g, '');
 
-function montrerResultats(cible, ms) {
+function montrerResultats(cible) {
+  // Le temps de calcul n'a rien à faire là : c'est une information de
+  // développeur, elle n'aide personne à choisir une boucle.
+  const n = etat.boucles.length;
   $('resume').textContent =
-    `${etat.boucles.length} boucles, cible ${(cible / 1000).toFixed(1)} km, ${Math.round(ms)} ms`;
+    `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
   ouvrirResultats();
 }
 
@@ -375,6 +380,7 @@ function montrerResultats(cible, ms) {
 function ouvrirResultats() {
   $('reglages').hidden = true;
   $('resultats').hidden = false;
+  peindreMode();
   peindreCartes();
 
   const b = etat.boucles[etat.choisie];
@@ -389,8 +395,15 @@ function ouvrirResultats() {
   precedent = null;
   carte.cadrer(b.points);
   carte.montrer(b, etat.depart);
-  $('suivi').hidden = true;
   if (document.visibilityState === 'visible') demarrerSuivi();
+}
+
+/* Une fois le parcours choisi, les réglages et les deux autres propositions
+   ne servent plus à rien : ce qu'on veut voir en courant, c'est la carte et
+   ce qui reste. Le panneau se réduit, et la carte prend la place. */
+function peindreMode() {
+  $('choix').hidden = !!etat.enCourse;
+  $('course').hidden = !etat.enCourse;
 }
 
 function peindreCartes() {
@@ -497,7 +510,6 @@ function surPosition(p) {
 
   const a = accrocher(b.points, moi, indice);
   const ligne = $('suivi');
-  ligne.hidden = false;
 
   if (!a || a.ecartM > ECART_MAX_M) {
     // Mieux vaut dire qu'on ne sait pas que de surligner une direction au
@@ -519,9 +531,12 @@ function surPosition(p) {
 
   const reste = parcouru < DEMARRE_M ? b.m : metresRestants(b.points, indice, sens);
   ligne.className = 'pied';
+  /* Plus de phrase pour expliquer ce que veut dire le jaune : la flèche le
+     dit d'elle-même, et une légende qu'on relit à chaque coup d'oeil est du
+     bruit. Il ne reste que le seul chiffre qu'on lit en courant. */
   ligne.innerHTML = reste >= 1000
-    ? `Encore <b>${(reste / 1000).toFixed(2)} km</b> · le jaune montre les 400 prochains mètres`
-    : `Encore <b>${reste} m</b> · le jaune montre la suite`;
+    ? `Encore <b>${(reste / 1000).toFixed(2)} km</b>`
+    : `Encore <b>${reste} m</b>`;
 }
 
 /* Une page cachée n'a pas besoin du GPS, et un PWA qu'on rouvre doit le
@@ -536,11 +551,16 @@ document.addEventListener('visibilitychange', () => {
 
 /* -------------------------------------------------------------- branche */
 
+/* ⚠️ Les deux ronds agissent sur le NOMBRE AFFICHé, pas sur la vitesse.
+   La première version faisait l'inverse, en se disant que « + » veut dire
+   « plus vite » : appuyer sur moins faisait alors monter le 6:00 à l'écran.
+   Un bouton posé à côté d'un nombre doit déplacer ce nombre dans le sens
+   qu'il annonce, quoi que ce nombre veuille dire. */
 $('allure-moins').addEventListener('click', () => {
-  etat.allure = Math.min(9 * 60, etat.allure + 10); ecrireReglages(); peindreReglages();
+  etat.allure = Math.max(3 * 60, etat.allure - 10); ecrireReglages(); peindreReglages();
 });
 $('allure-plus').addEventListener('click', () => {
-  etat.allure = Math.max(3 * 60, etat.allure - 10); ecrireReglages(); peindreReglages();
+  etat.allure = Math.min(9 * 60, etat.allure + 10); ecrireReglages(); peindreReglages();
 });
 $('opt-feux').addEventListener('click', () => {
   etat.eviterFeux = !etat.eviterFeux; ecrireReglages(); peindreReglages();
@@ -585,7 +605,25 @@ $('autres').addEventListener('click', () => chercher(true));
 $('retour').addEventListener('click', () => {
   $('resultats').hidden = true;
   $('reglages').hidden = false;
+  etat.enCourse = false;
+  sauverParcours(null);
   arreterSuivi();
+});
+
+$('suivre').addEventListener('click', () => {
+  etat.enCourse = true;
+  peindreMode();
+  sauverParcours(etat.boucles[etat.choisie]);
+  // Le panneau vient de rétrécir : la carte a plus de place, on la recadre.
+  const b = etat.boucles[etat.choisie];
+  if (b) { carte.cadrer(b.points); carte.montrer(b, etat.depart); }
+});
+
+$('quitter').addEventListener('click', () => {
+  etat.enCourse = false;
+  peindreMode();
+  const b = etat.boucles[etat.choisie];
+  if (b) { carte.cadrer(b.points); carte.montrer(b, etat.depart); }
 });
 
 /* Une pression brève sur la carte déplace le départ. Le déplacement et le
@@ -641,6 +679,9 @@ const enCoursDeCourse = lireParcours();
 if (enCoursDeCourse) {
   etat.boucles = [enCoursDeCourse];
   etat.choisie = 0;
+  // Rouvrir l'app en pleine course doit rendre l'écran de course, pas la
+  // liste des propositions : c'est tout l'intérêt de retrouver son parcours.
+  etat.enCourse = enCoursDeCourse.enCourse !== false;
   $('resume').textContent = 'Parcours en cours';
   ouvrirResultats();
 }
