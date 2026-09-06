@@ -145,6 +145,18 @@ export class Carte {
     this.centre = { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
   }
 
+  /** Cadre sur un point, quand il n'y a pas encore de boucle à montrer :
+      juste après avoir trouvé la position, on veut voir SON quartier. */
+  cadrerAutour(point, rayonM) {
+    this.poserOrigine(point);
+    if (!this.origine) return;
+    const { largeur, hauteur } = this.taille();
+    this.echelle = echellePour(largeur, hauteur, rayonM * 2, rayonM * 2);
+    this.centre = this.versM(point);
+    this.cadre = null;
+    this.deplacee = false;
+  }
+
   /* Au tout premier lancement il y a un départ mémorisé mais pas encore de
      rues : sans origine, toute projection déréférence null. On pose donc le
      repère sur le départ, quitte à ne dessiner qu'un point sur du noir. */

@@ -190,6 +190,63 @@ function rayonPour(distanceCible) {
   return Math.max(900, Math.min(2500, distanceCible / 4));
 }
 
+/* ------------------------------------------------------------- quartier
+
+   ⚠️ Cette étape était enfermée dans la génération de boucles, et c'est ce
+   qui donnait une app qui a l'air cassée : la position était trouvée, le
+   rond vert du départ s'affichait, et la carte restait NOIRE tant qu'on
+   n'avait pas appuyé sur le bouton. Rien ne disait qu'il fallait appuyer.
+
+   Elle est donc appelable seule : dès qu'on a une position, on montre le
+   quartier. Chercher des boucles ensuite ne coûte plus rien. */
+async function assurerQuartier(cible, { reseau = true } = {}) {
+  const rayon = rayonPour(cible);
+
+  const memeZone = etat.grapheDe &&
+    Math.abs(etat.grapheDe.lat - etat.depart.lat) < 0.004 &&
+    Math.abs(etat.grapheDe.lon - etat.depart.lon) < 0.006 &&
+    etat.grapheDe.rayon >= rayon &&
+    etat.grapheDe.nuit === etat.nuit &&
+    // Les deux options changent le POIDS des arêtes, donc le graphe entier.
+    // Les vérifier ici plutôt que de compter sur les gestionnaires de clic
+    // pour invalider : un jour on ajoutera une troisième option et on
+    // oubliera la ligne d'invalidation, sans que rien ne le signale.
+    etat.grapheDe.eviterFeux === etat.eviterFeux;
+  if (memeZone) return true;
+
+  const boite = bbox(etat.depart, rayon);
+  let osm;
+
+  if (reseau) {
+    dire('Chargement des rues...');
+    osm = await charger(boite, (fait, total, toutEnCache) => {
+      if (toutEnCache) return dire('Quartier déjà en mémoire');
+      // Le premier quartier prend une bonne minute : le dire évite de croire
+      // que l'app est plantée et de la fermer.
+      dire(`Téléchargement de vos rues, ${fait} sur ${total}. Une minute environ, `
+         + `une seule fois par quartier.`);
+    });
+  } else {
+    // Au lancement : ce qui est déjà en mémoire, tout de suite, sans réseau.
+    osm = await chargerDuCache(boite);
+    if (!osm) return false;
+  }
+
+  const brut = construireGraphe(osm, { nuit: etat.nuit, eviterFeux: etat.eviterFeux });
+  etat.graphe = plusGrandeComposante(brut);
+  etat.grapheDe = { ...etat.depart, rayon, nuit: etat.nuit, eviterFeux: etat.eviterFeux };
+  // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
+  // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
+  // tracé construit dans l'ancien repère se retrouverait décalé de plusieurs
+  // rues sans que rien ne le signale.
+  carte.charger(etat.graphe, carte.origine || etat.depart);
+  if (!etat.boucles.length) {
+    carte.cadrerAutour(etat.depart, rayon * 0.75);
+    carte.montrer(null, etat.depart);
+  }
+  return true;
+}
+
 /* --------------------------------------------------------------- action */
 
 let enCours = false;
@@ -207,35 +264,9 @@ async function chercher(nouvelleGraine) {
     }
 
     const cible = distancePour(etat.duree * 60, etat.allure);
-    const rayon = rayonPour(cible);
+    await assurerQuartier(cible);
 
-    const memeZone = etat.grapheDe &&
-      Math.abs(etat.grapheDe.lat - etat.depart.lat) < 0.004 &&
-      Math.abs(etat.grapheDe.lon - etat.depart.lon) < 0.006 &&
-      etat.grapheDe.rayon >= rayon &&
-      etat.grapheDe.nuit === etat.nuit &&
-      // Les deux options changent le POIDS des arêtes, donc le graphe entier.
-      // Les vérifier ici plutôt que de compter sur les gestionnaires de clic
-      // pour invalider : un jour on ajoutera une troisième option et on
-      // oubliera la ligne d'invalidation, sans que rien ne le signale.
-      etat.grapheDe.eviterFeux === etat.eviterFeux;
-
-    if (!memeZone) {
-      dire('Chargement des rues...');
-      const osm = await charger(bbox(etat.depart, rayon), (fait, total, toutEnCache) => {
-        if (toutEnCache) return dire('Quartier déjà en mémoire');
-        // Le premier quartier prend une bonne minute : le dire évite de
-        // croire que l'app est plantée et de la fermer.
-        dire(`Téléchargement du quartier ${fait} sur ${total}, une minute environ`);
-      });
-
-      const brut = construireGraphe(osm, { nuit: etat.nuit, eviterFeux: etat.eviterFeux });
-      etat.graphe = plusGrandeComposante(brut);
-      etat.grapheDe = { ...etat.depart, rayon, nuit: etat.nuit, eviterFeux: etat.eviterFeux };
-      carte.charger(etat.graphe, etat.depart);
-    }
-
-    if (etat.graphe.voisins.size < 50) {
+    if (!etat.graphe || etat.graphe.voisins.size < 50) {
       throw new Error('desert');
     }
 
@@ -501,9 +532,13 @@ $('ma-position').addEventListener('click', async () => {
       Math.abs(avant.lat - etat.depart.lat) > 1e-5 || Math.abs(avant.lon - etat.depart.lon) > 1e-5;
     if (bouge) { etat.boucles = []; etat.choisie = 0; $('resultats').hidden = true; $('reglages').hidden = false; }
     carte.montrer(null, etat.depart);
-    direUnMoment(etat.depart.precision > 50
-      ? `Position trouvée, mais à ${Math.round(etat.depart.precision)} m près seulement.`
-      : 'Position trouvée.');
+    if (etat.depart.precision > 50) {
+      direUnMoment(`Position trouvée, mais à ${Math.round(etat.depart.precision)} m près seulement.`);
+    }
+    // Montrer le quartier dans la foulée : une carte noire sous un rond vert
+    // ne dit rien de ce qu'il faut faire ensuite.
+    await assurerQuartier(distancePour(etat.duree * 60, etat.allure));
+    if (etat.depart.precision <= 50) dire(null);
   } catch (e) {
     dire(message(e), true);
   } finally {
@@ -560,30 +595,64 @@ if (etat.depart) carte.montrer(null, etat.depart);
 
 /* Rouvrir l'app en pleine course doit retrouver le parcours, pas l'écran de
    réglages : Android est libre de tuer une PWA restée en poche. */
+/* Au lancement, si le quartier est déjà en mémoire, l'afficher sans rien
+   demander au réseau. Sinon la carte reste noire jusqu'au premier appui, ce
+   qui se lit comme une panne. */
+if (etat.depart) {
+  assurerQuartier(distancePour(etat.duree * 60, etat.allure), { reseau: false })
+    .catch(() => {});
+}
+
 const enCoursDeCourse = lireParcours();
 if (enCoursDeCourse) {
   etat.boucles = [enCoursDeCourse];
   etat.choisie = 0;
   $('resume').textContent = 'Parcours en cours';
   ouvrirResultats();
-  redessinerLesRues(enCoursDeCourse);
 }
 
-/* Le tracé seul sur du noir ne dit pas grand-chose : ce qu'on cherche en
-   sortant le téléphone, c'est « je suis à quelle rue ». Les tuiles sont déjà
-   en mémoire, on refait donc le graphe pour dessiner le quartier.
-   ⚠️ Sans réseau et sans blocage : le parcours et la position sont déjà à
-   l'écran, et un quartier absent du cache ne doit rien retarder. */
-async function redessinerLesRues(b) {
-  try {
-    const centre = etat.depart || b.points[0];
-    const osm = await chargerDuCache(bbox(centre, rayonPour(b.m)));
-    if (!osm) return;
-    etat.graphe = plusGrandeComposante(
-      construireGraphe(osm, { nuit: etat.nuit, eviterFeux: etat.eviterFeux }));
-    carte.charger(etat.graphe, carte.origine || centre);
-    carte.dessiner();
-  } catch (e) { /* la carte reste sans fond, le parcours reste juste */ }
+
+/* -------------------------------------------------------- installation
+
+   ⚠️ Chrome et Brave ne montrent PLUS de bandeau « installer ». Ils
+   préviennent la page par `beforeinstallprompt` et attendent qu'elle
+   réagisse. Une app qui n'écoute pas cet événement remplit tous les critères
+   d'installation et ne propose pourtant jamais rien : c'est exactement ce
+   qui est arrivé ici, et déjà à GVT 1.0.0.
+
+   Deux défauts à ne pas reproduire, tous deux présents dans la-cour :
+   l'écouteur de clic doit être posé UNE FOIS, hors du gestionnaire, sinon un
+   second événement l'empile et un seul appui déclenche plusieurs invites ;
+   et une invite refusée ne doit pas cacher le bouton définitivement, on
+   change souvent d'avis. */
+let inviteInstallation = null;
+
+addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  inviteInstallation = e;
+  $('installer').hidden = false;
+});
+
+$('installer').addEventListener('click', async () => {
+  if (!inviteInstallation) return;
+  const invite = inviteInstallation;
+  inviteInstallation = null;          // une invite ne se rejoue pas
+  invite.prompt();
+  const { outcome } = await invite.userChoice;
+  if (outcome === 'accepted') {
+    $('installer').hidden = true;
+  } else {
+    // Refusée : le bouton reste, mais l'invite est consommée. Le navigateur
+    // en renverra une plus tard ; d'ici là on renvoie vers le menu.
+    direUnMoment('Sinon, menu du navigateur puis « Installer l’application ».');
+  }
+});
+
+addEventListener('appinstalled', () => { $('installer').hidden = true; });
+
+// Déjà installée : le bouton n'a plus lieu d'être.
+if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
+  $('installer').hidden = true;
 }
 
 if ('serviceWorker' in navigator) {

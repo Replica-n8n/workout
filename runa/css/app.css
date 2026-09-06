@@ -49,6 +49,8 @@ body {
   background: var(--carte);
 }
 
+/* Le bandeau d'état doit être impossible à manquer pendant une attente d'une
+   minute : sans lui, l'écran noir de la carte se lit comme une app plantée. */
 #etat {
   position: absolute;
   top: calc(10px + env(safe-area-inset-top));
@@ -171,6 +173,9 @@ button.principal {
   width: 100%;
 }
 button.principal:disabled { opacity: .4; }
+
+#installer { width: 100%; }
+#installer[hidden] { display: none; }
 
 button.secondaire {
   min-height: 46px;
