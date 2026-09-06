@@ -73,6 +73,41 @@
 
 </section>
 
+<div id="secours" hidden>
+  <b>L’application n’a pas pu démarrer.</b>
+  <button id="reparer">Réparer et recharger</button>
+</div>
+
+<!-- ⚠️ Ce script n'est PAS un module, exprès : si `js/app.js` échoue à
+     charger, un module ne s'exécuterait pas non plus, et l'app resterait un
+     HTML mort sans rien pour s'en sortir. Vu en vrai après une mise à jour
+     où le cache servait deux versions mélangées. -->
+<script>
+(function () {
+  var demarre = false;
+  window.addEventListener('runa-demarre', function () { demarre = true; });
+  window.addEventListener('error', function (e) {
+    if (e && e.target && e.target.tagName === 'SCRIPT') montrer();
+  }, true);
+  setTimeout(function () { if (!demarre) montrer(); }, 4000);
+
+  function montrer() { document.getElementById('secours').hidden = false; }
+
+  document.getElementById('reparer').addEventListener('click', function () {
+    var fini = function () { location.replace(location.pathname + '?r=' + Date.now()); };
+    var taches = [];
+    if (window.caches) taches.push(caches.keys().then(function (ks) {
+      return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+    }));
+    if (navigator.serviceWorker) taches.push(
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        return Promise.all(rs.map(function (r) { return r.unregister(); }));
+      }));
+    Promise.all(taches).then(fini, fini);
+  });
+})();
+</script>
+
 <script type="module" src="js/app.js"></script>
 </body>
 </html>

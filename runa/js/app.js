@@ -708,6 +708,23 @@ if (window.matchMedia('(display-mode: standalone)').matches || navigator.standal
   inviteInstallation = null;
 }
 
+/* Dit au filet de sécurité que le module a bien démarré. */
+dispatchEvent(new Event('runa-demarre'));
+
+/* Le service worker prévient quand il a remplacé une version précédente : la
+   page tourne alors avec l'ancien lot de modules, et il faut la recharger
+   pour retrouver un ensemble cohérent. Une seule fois, sinon on boucle. */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (!e.data || e.data.runa !== 'recharge') return;
+    try {
+      if (sessionStorage.getItem('runa-recharge')) return;
+      sessionStorage.setItem('runa-recharge', '1');
+    } catch (err) {}
+    location.reload();
+  });
+}
+
 if ('serviceWorker' in navigator) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }

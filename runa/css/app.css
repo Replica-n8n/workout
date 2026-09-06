@@ -292,3 +292,28 @@ button.secondaire {
 #suivi.dehors { color: var(--jaune); }
 #suivi b { color: var(--texte); font-variant-numeric: tabular-nums; }
 #suivi[hidden] { display: none; }
+
+/* Le filet de sécurité : ce qui s'affiche quand le module principal n'a pas
+   pu démarrer. Sans lui, l'app reste un HTML mort dont aucun bouton ne
+   répond, et rien à l'écran ne dit pourquoi. */
+#secours {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  z-index: 10;
+  background: var(--panneau);
+  border: 1px solid var(--rouge);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#secours[hidden] { display: none; }
+#secours b { color: var(--rouge); font-size: .95rem; }
+#secours button {
+  min-height: 48px;
+  border: 0; border-radius: 11px;
+  background: var(--vert); color: #0d0f12;
+  font: 700 .95rem/1 inherit;
+}
