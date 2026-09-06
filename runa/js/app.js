@@ -455,8 +455,8 @@ function surPosition(p) {
   const reste = parcouru < DEMARRE_M ? b.m : metresRestants(b.points, indice, sens);
   ligne.className = 'pied';
   ligne.innerHTML = reste >= 1000
-    ? `Encore <b>${(reste / 1000).toFixed(2)} km</b> · le vert montre les 400 prochains mètres`
-    : `Encore <b>${reste} m</b> · le vert montre la suite`;
+    ? `Encore <b>${(reste / 1000).toFixed(2)} km</b> · le jaune montre les 400 prochains mètres`
+    : `Encore <b>${reste} m</b> · le jaune montre la suite`;
 }
 
 /* Une page cachée n'a pas besoin du GPS, et un PWA qu'on rouvre doit le

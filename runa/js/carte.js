@@ -16,6 +16,27 @@
 
 const R = 6371008.8, RAD = Math.PI / 180;
 
+/* ---------------------------------------------------------- les couleurs
+
+   Le parcours et sa suite immédiate ne se distinguaient que par la CLARTÉ,
+   deux verts, et c'est exactement ce qu'un écran au soleil écrase : la
+   lumière renvoyée s'ajoute à chaque pixel et comprime les tons sombres.
+   Mesuré sur la vraie carte : 4,1:1 à l'ombre, 2,5:1 en plein jour.
+
+   Le jaune change de TEINTE en plus de la clarté. Écart de couleur 88 contre
+   50, et surtout il tient pour les deux daltonismes les plus courants (76 en
+   protanopie, 89 en deuteranopie), là où deux verts s'effondrent.
+
+   Pourquoi pas l'orange, qui est pourtant LA couleur du running : c'est
+   celle de Strava, et surtout elle est sombre. Mesurée sur ce fond de carte,
+   la paire gris/orange donne 2,3:1, et 1,6:1 au soleil, moins bien que les
+   deux verts qu'on remplace. Le vert reste la couleur de l'app, le jaune ne
+   sert qu'à une chose : où mettre les pieds dans les 400 prochains mètres. */
+const TRACE = '#6ee7a0';        // le parcours, quand rien n'est surligné
+const TRACE_ATTENUE = '#2f6b4c'; // le parcours, pendant la course
+const SUITE = '#facc15';         // les 400 prochains mètres
+const MOI = '#ffffff';
+
 /* Bornes de zoom, en pixels par mètre. En dessous, tout un arrondissement
    tient dans un timbre ; au-dessus, on voit trois maisons. */
 export const ECHELLE_MIN = 0.02;
@@ -159,13 +180,26 @@ export class Carte {
     this.poserOrigine(moi);
     this.moi = moi && this.origine ? this.versM(moi) : null;
     this.restant = null;
+    this.pointe = null;
     if (prochainsPoints && prochainsPoints.length > 1 && this.origine) {
       const p = new Path2D();
+      let avantDernier = null, dernier = null;
       prochainsPoints.forEach((pt, i) => {
         const m = this.versM(pt);
         i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y);
+        avantDernier = dernier;
+        dernier = m;
       });
       this.restant = p;
+      // Le cap de la flèche se prend sur les derniers mètres du segment, pas
+      // sur ses deux derniers points : deux points collés donnent un angle
+      // qui saute d'un rafraîchissement à l'autre.
+      const recul = prochainsPoints[Math.max(0, prochainsPoints.length - 4)];
+      const rm = recul ? this.versM(recul) : avantDernier;
+      if (rm && dernier) {
+        this.pointe = { x: dernier.x, y: dernier.y,
+                        ang: Math.atan2(dernier.y - rm.y, dernier.x - rm.x) };
+      }
     }
     this.dessiner();
   }
@@ -233,15 +267,31 @@ export class Carte {
     if (this.trace) {
       // Le parcours entier s'assombrit dès qu'une portion est surlignée :
       // sans ce contraste, le surlignage ne se voit pas en plein soleil.
-      ctx.strokeStyle = this.restant ? '#2f6b4c' : '#6ee7a0';
+      ctx.strokeStyle = this.restant ? TRACE_ATTENUE : TRACE;
       ctx.lineWidth = 5 / e;
       ctx.stroke(this.trace);
     }
 
     if (this.restant) {
-      ctx.strokeStyle = '#6ee7a0';
+      ctx.strokeStyle = SUITE;
       ctx.lineWidth = 7 / e;
       ctx.stroke(this.restant);
+
+      /* La flèche au bout du surlignage. Ce n'est pas un ornement : une
+         information portée par la seule couleur ne tient ni pour un
+         daltonien, ni à bout de bras, ni essoufflée. Elle dit le SENS, ce
+         que la couleur ne peut pas dire. */
+      if (this.pointe) {
+        const { x, y, ang } = this.pointe;
+        const r = 13 / e, l = 8 / e;
+        ctx.fillStyle = SUITE;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(ang) * r, y + Math.sin(ang) * r);
+        ctx.lineTo(x + Math.cos(ang + 2.5) * l, y + Math.sin(ang + 2.5) * l);
+        ctx.lineTo(x + Math.cos(ang - 2.5) * l, y + Math.sin(ang - 2.5) * l);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     if (this.depart) {
@@ -257,7 +307,7 @@ export class Carte {
     if (this.moi) {
       // Un disque plein, plus gros que le rond du départ : en courant, on
       // regarde l'écran une seconde, il faut le trouver du premier coup.
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = MOI;
       ctx.beginPath();
       ctx.arc(this.moi.x, this.moi.y, 11 / e, 0, 7);
       ctx.fill();
