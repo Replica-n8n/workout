@@ -232,6 +232,11 @@ body {
   font-size: .95rem;
   color: transparent;
 }
+/* L'étoile des favoris n'est pas une case à cocher : elle est toujours
+   pleine, c'est une porte vers une liste. */
+.coche.etoile { background: var(--case); border-color: var(--trait); color: var(--jaune); }
+#ouvrir-favoris[hidden] { display: none; }
+
 .option[aria-pressed="true"] .coche {
   background: var(--vert);
   border-color: var(--vert);
@@ -344,3 +349,52 @@ button.secondaire {
   background: var(--vert); color: #0d0f12;
   font: 700 .95rem/1 inherit;
 }
+
+/* ------------------------------------------------------- parcours gardés */
+
+#mesparcours { display: flex; flex-direction: column; gap: 10px; }
+#mesparcours[hidden] { display: none; }
+#liste-favoris { display: flex; flex-direction: column; gap: 8px; }
+
+.favori {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid var(--trait);
+  border-radius: 12px;
+  background: var(--case);
+}
+.favori .ouvrir {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: 0;
+  color: var(--texte);
+  font: inherit;
+  text-align: left;
+  min-height: 44px;
+  padding: 0;
+}
+.favori .km {
+  font-size: 1.3rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; min-width: 78px;
+}
+.favori .detail { font-size: .82rem; color: var(--gris); line-height: 1.35; }
+.favori .detail b { color: var(--texte); font-weight: 600; }
+.favori .jeter {
+  width: 44px; height: 44px; flex: 0 0 44px;
+  border: 0; border-radius: 10px;
+  background: transparent; color: var(--gris);
+  font-size: 1.05rem;
+}
+
+#garder[aria-pressed="true"] {
+  border-color: var(--jaune);
+  color: var(--jaune);
+}
+
+.vide { color: var(--gris); font-size: .88rem; font-style: italic; margin: 0; }

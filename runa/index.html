@@ -35,6 +35,11 @@
       <button class="secondaire" id="ma-position">Ma position</button>
     </div>
 
+    <button class="option" id="ouvrir-favoris" hidden>
+      <span class="coche etoile" aria-hidden="true">&#9733;</span>
+      <span class="nom">Mes parcours<span class="sous" id="favoris-combien"></span></span>
+    </button>
+
     <p class="titre">Durée</p>
     <div class="chips" id="durees" role="group" aria-label="Durée de la sortie"></div>
 
@@ -75,9 +80,18 @@
 
     <div id="course" hidden>
       <p id="suivi"></p>
-      <button class="secondaire" id="quitter">Changer de parcours</button>
+      <div class="rangee">
+        <button class="secondaire" id="garder">Garder</button>
+        <button class="secondaire" id="quitter">Changer de parcours</button>
+      </div>
     </div>
 
+  </div>
+
+  <div id="mesparcours" hidden>
+    <p class="titre">Mes parcours</p>
+    <div id="liste-favoris"></div>
+    <button class="secondaire" id="fermer-favoris" style="margin-top:10px">Retour</button>
   </div>
 
 </section>

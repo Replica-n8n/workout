@@ -13,6 +13,7 @@ import { accrocher, sensDeMarche, segmentSuivant, metresRestants, ECART_MAX_M } 
 import { charger, chargerDuCache } from './donnees.js';
 import { MARGE_ZONE } from '../lib/overpass.js';
 import { Carte } from './carte.js';
+import * as favoris from './favoris.js';
 
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
@@ -86,6 +87,14 @@ function peindreReglages() {
   /* Annoncer « touchez la carte » devant un écran noir est un mensonge :
      sans quartier chargé, la carte n'a pas de repère et ne réagit à rien. */
   $('astuce').hidden = !carte.origine;
+
+  /* La ligne n'apparaît qu'une fois qu'il y a quelque chose dedans. Ce qui
+     annonce la fonction, c'est le bouton « Garder » pendant la course, au
+     moment où elle a un sens : un « Mes parcours (0) » sur l'écran de
+     départ ne serait que du bruit. */
+  const n = favoris.combien();
+  $('ouvrir-favoris').hidden = n === 0;
+  $('favoris-combien').textContent = n === 1 ? '1 parcours gardé' : `${n} parcours gardés`;
 
   const km = distancePour(etat.duree * 60, etat.allure) / 1000;
   $('chercher').textContent = `Trouver trois boucles de ${km.toFixed(1)} km`;
@@ -372,6 +381,77 @@ function message(e) {
   return 'Échec : ' + (e && e.message ? e.message : 'inconnu');
 }
 
+/* ----------------------------------------------------- parcours gardés */
+
+function ouvrirFavoris() {
+  $('reglages').hidden = true;
+  $('resultats').hidden = true;
+  $('mesparcours').hidden = false;
+  arreterSuivi();
+  peindreFavoris();
+}
+
+function fermerFavoris() {
+  $('mesparcours').hidden = true;
+  $('reglages').hidden = false;
+  peindreReglages();
+}
+
+function peindreFavoris() {
+  const zone = $('liste-favoris');
+  zone.innerHTML = '';
+  const liste = favoris.lireTout();
+
+  if (!liste.length) {
+    zone.innerHTML = '<p class="vide">Aucun parcours gardé pour l’instant.</p>';
+    return;
+  }
+
+  const prises = new Set();
+  for (const f of liste) {
+    const el = document.createElement('div');
+    el.className = 'favori';
+
+    const rue = (f.rues || []).find(r => !prises.has(r.nom)) || (f.rues || [])[0] || null;
+    if (rue) prises.add(rue.nom);
+    const feux = f.feux === 0 ? '<b>aucun feu</b>'
+               : f.feux === 1 ? '<b>1 feu</b>' : `<b>${f.feux} feux</b>`;
+    const minutes = Math.round((f.m / 1000) * (etat.allure / 60));
+
+    el.innerHTML =
+      `<button class="ouvrir" type="button">` +
+        `<span class="km">${(f.m / 1000).toFixed(2)} km</span>` +
+        `<span class="detail">${rue ? 'par ' + nommer(rue.nom) + '<br>' : ''}` +
+        `${feux} · ${minutes} min</span>` +
+      `</button>` +
+      `<button class="jeter" type="button" aria-label="Oublier ce parcours">&#10005;</button>`;
+
+    el.querySelector('.ouvrir').addEventListener('click', () => reprendre(f));
+    el.querySelector('.jeter').addEventListener('click', () => {
+      favoris.oublier(f.id);
+      peindreFavoris();
+      if (!favoris.combien()) fermerFavoris();
+    });
+    zone.appendChild(el);
+  }
+}
+
+/* Reprendre un parcours gardé : on le remet en cours, sans rien recalculer
+   ni redemander au réseau. Les rues du quartier se redessinent depuis la
+   mémoire si elles y sont, sinon le tracé seul suffit à courir. */
+function reprendre(f) {
+  $('mesparcours').hidden = true;
+  etat.boucles = [{ ...f, noeuds: [], ways: new Set(f.ways || []) }];
+  etat.choisie = 0;
+  etat.enCourse = true;
+  $('resume').textContent = 'Parcours gardé';
+  ouvrirResultats();
+  if (etat.depart) {
+    assurerQuartier(distancePour(etat.duree * 60, etat.allure), { reseau: false })
+      .catch(() => {});
+  }
+}
+
 /* ----------------------------------------------------------- résultats */
 
 /* OSM écrit « Avenue du Mont-Royal Est » ou « Rue Saint-Denis », avec le type
@@ -434,6 +514,15 @@ function ouvrirResultats() {
 function peindreMode() {
   $('choix').hidden = !!etat.enCourse;
   $('course').hidden = !etat.enCourse;
+  peindreGarder();
+}
+
+function peindreGarder() {
+  const b = etat.boucles[etat.choisie];
+  const deja = b ? favoris.estGarde(b) : false;
+  const bouton = $('garder');
+  bouton.setAttribute('aria-pressed', String(deja));
+  bouton.textContent = deja ? 'Gardé' : 'Garder';
 }
 
 function peindreCartes() {
@@ -638,6 +727,29 @@ $('retour').addEventListener('click', () => {
   etat.enCourse = false;
   sauverParcours(null);
   arreterSuivi();
+  // ⚠️ Repeindre, sinon la ligne « Mes parcours » reste à la valeur qu'elle
+  // avait avant qu'on garde quoi que ce soit : on venait d'en garder un et
+  // l'écran annonçait toujours zéro.
+  peindreReglages();
+});
+
+$('ouvrir-favoris').addEventListener('click', ouvrirFavoris);
+$('fermer-favoris').addEventListener('click', fermerFavoris);
+
+$('garder').addEventListener('click', () => {
+  const b = etat.boucles[etat.choisie];
+  if (!b) return;
+  if (favoris.estGarde(b)) {
+    // Deuxième appui : on retire, sinon il n'y aurait aucun moyen de
+    // défaire un appui malencontreux sans passer par la liste.
+    const f = favoris.lireTout().find(x => Math.abs(x.m - b.m) <= 50);
+    if (f) favoris.oublier(f.id);
+    direUnMoment('Parcours retiré de vos gardés.');
+  } else {
+    favoris.garder(b) ? direUnMoment('Parcours gardé.')
+                      : direUnMoment('Impossible de garder : mémoire pleine.', true);
+  }
+  peindreGarder();
 });
 
 $('suivre').addEventListener('click', () => {
