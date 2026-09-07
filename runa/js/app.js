@@ -83,6 +83,10 @@ function peindreReglages() {
 
   peindreDepart();
 
+  /* Annoncer « touchez la carte » devant un écran noir est un mensonge :
+     sans quartier chargé, la carte n'a pas de repère et ne réagit à rien. */
+  $('astuce').hidden = !carte.origine;
+
   const km = distancePour(etat.duree * 60, etat.allure) / 1000;
   $('chercher').textContent = `Trouver trois boucles de ${km.toFixed(1)} km`;
 }
@@ -189,18 +193,29 @@ function direUnMoment(texte, erreur = false) {
 
 /* ------------------------------------------------------------- position */
 
-function positionner() {
+function unePosition(options) {
   return new Promise((ok, ko) => {
-    if (!navigator.geolocation) return ko(new Error('nogeo'));
     navigator.geolocation.getCurrentPosition(
       p => ok({
         lat: p.coords.latitude, lon: p.coords.longitude,
         precision: p.coords.accuracy, source: 'gps', quand: Date.now()
       }),
-      e => ko(e),
-      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+      ko, options
     );
   });
+}
+
+async function positionner() {
+  if (!navigator.geolocation) throw new Error('nogeo');
+  try {
+    return await unePosition({ enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+  } catch (e) {
+    // Un refus est définitif, inutile d'insister. Mais un échec ou une
+    // expiration en haute précision arrive souvent sur un ordinateur, qui
+    // n'a pas de GPS : la position par le réseau, elle, répond.
+    if (e && e.code === 1) throw e;
+    return unePosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+  }
 }
 
 /* --------------------------------------------------------------- rayon */
@@ -284,6 +299,7 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
     carte.cadrerAutour(etat.depart, rayon * 0.75);
     carte.montrer(null, etat.depart);
   }
+  $('astuce').hidden = false;   // il y a une carte, on peut le dire
   return true;
 }
 
@@ -334,7 +350,16 @@ async function chercher(nouvelleGraine) {
 }
 
 function message(e) {
-  if (e && e.code === 1) return 'Position refusée. Autorisez la localisation pour ce site, puis réessayez.';
+  /* ⚠️ Sans position, l'app est un cul-de-sac : pas de position, donc pas de
+     quartier chargé, donc pas de carte, donc rien à toucher pour poser un
+     départ à la main. Le message doit donc dire quoi FAIRE, pas seulement ce
+     qui a raté. C'est le cas le plus courant sur ordinateur, où il n'y a pas
+     de GPS et où le navigateur refuse souvent tout net. */
+  if (e && e.code === 1) {
+    return 'Runa a besoin de votre position pour trouver vos rues. '
+         + 'Autorisez-la dans les réglages du site, par l’icône à gauche de '
+         + 'l’adresse, puis touchez « Ma position ».';
+  }
   if (e && e.code === 2) return 'Position indisponible. Sortez ou activez la localisation, puis réessayez.';
   if (e && e.code === 3) return 'La position met trop de temps à arriver. Réessayez.';
   if (e && e.message === 'debit') return 'Le serveur OpenStreetMap est saturé. Réessayez dans une minute.';

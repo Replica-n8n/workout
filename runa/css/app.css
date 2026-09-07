@@ -27,7 +27,7 @@ html, body {
 }
 
 body {
-  background: var(--fond);
+  background: #07090b;
   color: var(--texte);
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
@@ -36,7 +36,21 @@ body {
      bouton principal glisse sous la ligne de flottaison. */
   height: 100dvh;
   padding-top: env(safe-area-inset-top);
+
+  /* ⚠️ Sur un écran large, l'app s'étirait sur toute la fenêtre : des
+     boutons de durée de 278 px, un panneau de 1440 px de large et une carte
+     écrasée en bandeau. Ça se lit comme une app cassée alors qu'elle
+     fonctionne. Elle est dessinée pour un téléphone : elle garde donc une
+     largeur de téléphone, centrée, quelle que soit la fenêtre. */
+  max-width: 460px;
+  margin: 0 auto;
+  position: relative;
+  box-shadow: 0 0 0 1px var(--trait);
 }
+
+/* Les éléments posés en absolu se repèrent sur le corps de page, donc sur la
+   colonne centrée, et non sur la fenêtre entière. */
+#etat, #installe { position: absolute; }
 
 /* ---------------------------------------------------------------- carte */
 
