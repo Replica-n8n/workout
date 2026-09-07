@@ -240,7 +240,9 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
     // Les vérifier ici plutôt que de compter sur les gestionnaires de clic
     // pour invalider : un jour on ajoutera une troisième option et on
     // oubliera la ligne d'invalidation, sans que rien ne le signale.
-    etat.grapheDe.eviterFeux === etat.eviterFeux;
+    etat.grapheDe.eviterFeux === etat.eviterFeux &&
+    // L'allure fixe ce que coûte un feu, donc le poids de chaque arête.
+    etat.grapheDe.allure === etat.allure;
   if (memeZone) return true;
 
   /* On télécharge un peu plus large qu'on n'a besoin, pour que le départ
@@ -267,9 +269,12 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
     if (!osm) return false;
   }
 
-  const brut = construireGraphe(osm, { nuit: etat.nuit, eviterFeux: etat.eviterFeux });
+  const brut = construireGraphe(osm, {
+    nuit: etat.nuit, eviterFeux: etat.eviterFeux, allure: etat.allure
+  });
   etat.graphe = plusGrandeComposante(brut);
-  etat.grapheDe = { ...etat.depart, rayon, nuit: etat.nuit, eviterFeux: etat.eviterFeux };
+  etat.grapheDe = { ...etat.depart, rayon, nuit: etat.nuit,
+                    eviterFeux: etat.eviterFeux, allure: etat.allure };
   // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
   // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
   // tracé construit dans l'ancien repère se retrouverait décalé de plusieurs

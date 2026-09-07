@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { construireGraphe, multiplicateur, noeudLePlusProche, plusGrandeComposante, PENALITES }
+import { construireGraphe, multiplicateur, noeudLePlusProche, plusGrandeComposante, PENALITES, coutDunFeu }
   from '../lib/graph.js';
 import { damier } from './grille.js';
 
@@ -136,4 +136,64 @@ test('plusGrandeComposante jette l’îlot isolé', () => {
   const propre = plusGrandeComposante(g);
   assert.ok(!propre.voisins.has(900001), 'l’îlot aurait dû être jeté');
   assert.equal(propre.voisins.size, 25);
+});
+
+test('un passage piéton à feu compte comme un feu', () => {
+  // ⚠️ Le défaut le plus grave trouvé sur ce projet, et il tenait à un
+  // détail de modélisation OSM : un piéton qui traverse une intersection à
+  // feu ne passe PAS par le noeud posé au milieu de la chaussée, il passe
+  // par le passage piéton. Comme la moitié d'un parcours suit les trottoirs,
+  // l'app annonçait « aucun feu » là où on s'arrêtait quinze fois.
+  const d = damier({ cotes: 5 });
+  const chaussee = 2 * 1000 + 3;
+  const avecFeu = 1 * 1000 + 3;
+  const sansFeu = 3 * 1000 + 3;
+  for (const el of d.osm.elements) {
+    if (el.type !== 'node') continue;
+    if (el.id === chaussee) el.tags = { highway: 'traffic_signals' };
+    if (el.id === avecFeu) el.tags = { highway: 'crossing', crossing: 'traffic_signals' };
+    if (el.id === sansFeu) el.tags = { highway: 'crossing', crossing: 'unmarked' };
+  }
+  const g = construireGraphe(d.osm);
+  assert.ok(g.feux.has(chaussee), 'le feu de chaussée');
+  assert.ok(g.feux.has(avecFeu), 'le passage piéton à feu');
+  assert.ok(!g.feux.has(sansFeu), 'un passage sans feu n’est pas un feu');
+  assert.ok(g.passages.has(sansFeu), 'il reste un passage');
+});
+
+test('les trois écritures OSM d’un passage à feu sont reconnues', () => {
+  // `crossing=signals` est l'ancienne forme, encore très présente.
+  for (const tags of [{ crossing: 'traffic_signals' }, { crossing: 'signals' },
+                      { 'crossing:signals': 'yes' }]) {
+    const d = damier({ cotes: 5 });
+    const cible = 2 * 1000 + 3;
+    for (const el of d.osm.elements) {
+      if (el.type === 'node' && el.id === cible) el.tags = { highway: 'crossing', ...tags };
+    }
+    assert.ok(construireGraphe(d.osm).feux.has(cible), JSON.stringify(tags));
+  }
+});
+
+test('ce que coûte un feu se déduit de l’allure, pas d’un chiffre en l’air', () => {
+  // Éviter un feu vaut la distance qu'on aurait parcourue pendant l'attente.
+  // Trente secondes à 6:00 au kilomètre font 83 m.
+  assert.ok(Math.abs(coutDunFeu(360) - 83) < 1, `${coutDunFeu(360).toFixed(0)} m à 6:00`);
+  assert.ok(coutDunFeu(300) > coutDunFeu(420), 'plus on court vite, plus un feu coûte cher');
+  // Dans la plage de l'app, 3:00 à 9:00, la valeur va de 167 à 56 mètres :
+  // seule la borne haute mord vraiment.
+  assert.equal(coutDunFeu(3 * 60), 150, 'plafonné à l’allure de compétition');
+  assert.ok(Math.abs(coutDunFeu(9 * 60) - 55.6) < 0.5, 'pas de plancher à 9:00');
+  // Les bornes restent là pour une valeur aberrante, d'où qu'elle vienne.
+  assert.equal(coutDunFeu(60 * 60), 50);
+  assert.equal(coutDunFeu(1), 150);
+});
+
+test('l’allure change vraiment le poids des arêtes', () => {
+  const cible = 2 * 1000 + 3;
+  const d = damier({ cotes: 5, feux: [cible] });
+  const lent = construireGraphe(d.osm, { allure: 8 * 60 });
+  const vite = construireGraphe(d.osm, { allure: 4 * 60 });
+  const vers = (g) => g.voisins.get(d.id(2, 1)).find(a => a.vers === cible);
+  assert.ok(vers(vite).cout > vers(lent).cout,
+    'un feu doit coûter plus cher à qui court vite');
 });

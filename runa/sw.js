@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [

@@ -37,6 +37,39 @@ const TRACE_ATTENUE = '#2f6b4c'; // le parcours, pendant la course
 const SUITE = '#facc15';         // les 400 prochains mètres
 const MOI = '#ffffff';
 
+/* ------------------------------------------------- la hiérarchie des voies
+
+   ⚠️ Tout était dessiné du même trait, et un simple croisement de deux rues
+   ressemblait à un plat de spaghettis dès qu'on zoomait. Ce n'est pas une
+   erreur des données : à Montréal, OpenStreetMap cartographie chaque
+   trottoir comme une ligne à part. Dans un extrait du Plateau, on compte
+   3 345 trottoirs et 2 716 passages piétons pour 632 rues résidentielles.
+
+   Un croisement, c'est donc deux chaussées, quatre trottoirs et jusqu'à
+   quatre passages : une dizaine de lignes pour ce que l'oeil appelle un
+   carrefour. Les dessiner toutes pareil, c'est mentir sur ce qu'on voit en
+   levant la tête.
+
+   On garde tout (c'est là-dessus qu'on court, 62 % du parcours suit les
+   trottoirs), mais on rend la chaussée lisible et le reste discret. */
+const VOIES = {
+  axes:     { couleur: '#3a424c', largeur: 4.5 },   // primary, secondary, tertiary
+  rues:     { couleur: '#272c33', largeur: 2.6 },   // residential, ruelles, piétonnes
+  sentiers: { couleur: '#191d23', largeur: 1.2 }    // trottoirs, passages, sentiers
+};
+
+function familleDeVoie(tags) {
+  if (!tags || !tags.highway) return 'sentiers';
+  const h = tags.highway;
+  if (h === 'primary' || h === 'secondary' || h === 'tertiary' ||
+      h === 'primary_link' || h === 'secondary_link' || h === 'tertiary_link') return 'axes';
+  if (h === 'footway' || h === 'path' || h === 'steps' ||
+      h === 'cycleway' || h === 'corridor') return 'sentiers';
+  // Une allée de stationnement ou une entrée de garage n'est pas une rue.
+  if (h === 'service') return tags.service === 'alley' ? 'rues' : 'sentiers';
+  return 'rues';
+}
+
 /* Bornes de zoom, en pixels par mètre. En dessous, tout un arrondissement
    tient dans un timbre ; au-dessus, on voit trois maisons. */
 export const ECHELLE_MIN = 0.02;
@@ -66,8 +99,7 @@ export class Carte {
     this.c = canvas;
     this.ctx = canvas.getContext('2d');
     this.origine = null;      // {lat, lon} : le zéro du repère en mètres
-    this.rues = null;         // Path2D en mètres
-    this.grandsAxes = null;
+    this.traces = null;       // {axes, rues, sentiers} en Path2D, en mètres
     this.trace = null;
     this.restant = null;      // les prochains mètres, surlignés
     this.moi = null;          // la position en direct
@@ -101,8 +133,7 @@ export class Carte {
       construit une fois puis transformé ne coûte presque rien. */
   charger(graphe, origine) {
     this.origine = origine;
-    const rues = new Path2D();
-    const axes = new Path2D();
+    const traces = { axes: new Path2D(), rues: new Path2D(), sentiers: new Path2D() };
     const vus = new Set();
 
     for (const [de, liste] of graphe.voisins) {
@@ -113,14 +144,12 @@ export class Carte {
         vus.add(cle);
         const p1 = this.versM(graphe.noeuds.get(de));
         const p2 = this.versM(graphe.noeuds.get(a.vers));
-        const t = graphe.ways.get(a.way);
-        const cible = t && /^(primary|secondary|tertiary)/.test(t.highway || '') ? axes : rues;
+        const cible = traces[familleDeVoie(graphe.ways.get(a.way))];
         cible.moveTo(p1.x, p1.y);
         cible.lineTo(p2.x, p2.y);
       }
     }
-    this.rues = rues;
-    this.grandsAxes = axes;
+    this.traces = traces;
     this.feux = [...graphe.feux]
       .filter(id => graphe.noeuds.has(id))
       .map(id => this.versM(graphe.noeuds.get(id)));
@@ -253,22 +282,25 @@ export class Carte {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    if (this.rues) {
-      ctx.strokeStyle = '#272c33';
-      ctx.lineWidth = 2.5 / e;
-      ctx.stroke(this.rues);
-    }
-    if (this.grandsAxes) {
-      // Les grands axes en plus clair : c'est ce que la boucle évite, et le
-      // voir rend le service de l'app lisible d'un coup d'oeil.
-      ctx.strokeStyle = '#3a424c';
-      ctx.lineWidth = 4.5 / e;
-      ctx.stroke(this.grandsAxes);
+    if (this.traces) {
+      /* Du plus discret au plus visible, pour que la chaussée passe par
+         dessus les trottoirs et pas l'inverse. Les grands axes en dernier :
+         c'est ce que la boucle évite, et le voir rend le service de l'app
+         lisible d'un coup d'oeil. */
+      for (const nom of ['sentiers', 'rues', 'axes']) {
+        // Les trottoirs ne s'affichent qu'une fois qu'on a zoomé assez pour
+        // que la nuance ait un sens ; de loin, ils empataient le dessin.
+        if (nom === 'sentiers' && e < 0.25) continue;
+        const v = VOIES[nom];
+        ctx.strokeStyle = v.couleur;
+        ctx.lineWidth = v.largeur / e;
+        ctx.stroke(this.traces[nom]);
+      }
     }
 
     if (this.feux && e > 0.12) {
       ctx.fillStyle = '#5a3f2a';
-      const r = 2.6 / e;
+      const r = 2.2 / e;
       for (const f of this.feux) {
         ctx.beginPath();
         ctx.arc(f.x, f.y, r, 0, 7);

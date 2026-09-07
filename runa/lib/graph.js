@@ -27,9 +27,34 @@ const SURFACES_MOLLES = new Set([
   'unpaved', 'ground', 'dirt', 'earth', 'grass', 'sand', 'mud', 'gravel', 'pebblestone'
 ]);
 
+/* Combien de temps on attend en moyenne à un feu rouge. Un cycle urbain
+   dure de 60 à 120 secondes ; qui arrive au hasard attend environ la moitié
+   de la phase rouge, soit une trentaine de secondes. */
+export const ATTENTE_AU_FEU_S = 30;
+
+/**
+ * Ce qu'un feu « coûte », en mètres équivalents.
+ *
+ * ⚠️ La spec disait 25 m, et c'était un chiffre en l'air. La bonne mesure
+ * est physique : éviter un feu vaut la distance qu'on aurait parcourue
+ * pendant qu'on attendait. À 6:00 au kilomètre, trente secondes d'attente
+ * font 83 mètres de course.
+ *
+ * Vérifié sur Montréal et Paris que monter de 25 à 85 m ne coûte rien :
+ * l'écart à la distance cible, la forme des boucles, le mélange rues /
+ * trottoirs / ruelles et la variété des trois propositions ne bougent pas,
+ * pendant que les feux traversés tombent de 8,5 à 3,5 par boucle de 6 km.
+ */
+export function coutDunFeu(allureSParKm = 360) {
+  const m = ATTENTE_AU_FEU_S * (1000 / allureSParKm);
+  // Borné : une allure de promenade ne doit pas rendre les feux gratuits, ni
+  // une allure de sprint transformer le parcours en labyrinthe de ruelles.
+  return Math.max(50, Math.min(150, m));
+}
+
 export const PENALITES = {
   grandAxeSansTrottoir: 1.8,   // spec 5.1
-  feuMetresEquivalents: 25,    // spec 5.1 : un feu « coûte » 25 m
+  feuMetresEquivalents: 25,    // conservé pour les tests, voir coutDunFeu
   nonEclaireLaNuit: 2.5,       // spec 5.1
   dejaCourue: 1.3,             // spec 5.1, option « rues inédites »
   escaliers: 3.0,              // ajout : des marches cassent une foulée
@@ -41,6 +66,7 @@ export const PENALITES = {
  * @param {object} osm      réponse Overpass décodée (`{ elements: [...] }`)
  * @param {object} [opts]
  * @param {boolean} [opts.eviterFeux]  défaut vrai : pénalise feux et grands axes
+ * @param {number} [opts.allure]       secondes par km, pour chiffrer un feu
  * @param {boolean} [opts.nuit]        pénaliser les rues non éclairées
  * @param {Set<number>} [opts.dejaCourues]  ids de ways déjà parcourus
  * @returns {{noeuds: Map, voisins: Map, feux: Set, ways: Map}}
@@ -51,7 +77,11 @@ export function construireGraphe(osm, opts = {}) {
   // Décoché, le coût redevient la simple longueur : c'est le plus court
   // chemin ordinaire, et c'est utile de pouvoir comparer.
   const eviterFeux = opts.eviterFeux !== false;
-  const coutFeu = eviterFeux ? PENALITES.feuMetresEquivalents : 0;
+  /* `PENALITES.feuMetresEquivalents` reste modifiable pour les mesures et les
+     tests ; en usage normal c'est l'allure qui décide. */
+  const coutFeu = !eviterFeux ? 0
+    : opts.allure ? coutDunFeu(opts.allure)
+    : PENALITES.feuMetresEquivalents;
 
   const noeuds = new Map();   // id -> {lat, lon}
   const feux = new Set();     // ids de noeuds highway=traffic_signals
@@ -64,7 +94,18 @@ export function construireGraphe(osm, opts = {}) {
       noeuds.set(el.id, { lat: el.lat, lon: el.lon });
       const h = el.tags && el.tags.highway;
       if (h === 'traffic_signals') feux.add(el.id);
-      else if (h === 'crossing') passages.add(el.id);
+      else if (h === 'crossing') {
+        // ⚠️ Un piéton qui traverse une intersection à feu ne passe PAS par
+        // le noeud `highway=traffic_signals`, qui est posé au milieu de la
+        // chaussée : il passe par le passage piéton. Ne compter que les
+        // noeuds de chaussée revenait donc à ignorer la quasi-totalité des
+        // arrêts réels, puisque la moitié d'un parcours suit les trottoirs.
+        // Mesuré avant correction, sur 36 boucles de 5 km : 1,3 feu compté
+        // par boucle à Montréal contre 14,7 traversés, et 0,1 contre 26,2 à
+        // Paris. L'app annonçait « aucun feu » et on s'arrêtait quinze fois.
+        if (feuDePassage(el.tags)) feux.add(el.id);
+        else passages.add(el.id);
+      }
     }
   }
 
@@ -94,6 +135,14 @@ export function construireGraphe(osm, opts = {}) {
   }
 
   return { noeuds, voisins, feux, passages, ways };
+}
+
+/* Les trois façons d'écrire « ce passage piéton a un feu » dans OSM.
+   `crossing=signals` est la forme ancienne, encore très présente. */
+function feuDePassage(tags) {
+  return tags.crossing === 'traffic_signals'
+      || tags.crossing === 'signals'
+      || tags['crossing:signals'] === 'yes';
 }
 
 function ajouter(voisins, de, vers, m, cout, way) {

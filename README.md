@@ -247,17 +247,55 @@ Le coût d'un tronçon n'est pas sa longueur, c'est sa longueur corrigée :
 
 | Ce qu'on traverse | Ce que ça coûte |
 |---|---|
-| un feu tricolore | 25 m de plus |
+| un feu tricolore, passage piéton signalisé compris | 83 m de plus à 6:00/km |
 | un grand axe sans trottoir déclaré | 1,8 fois la distance |
 | une rue non éclairée, en mode nocturne | 2,5 fois la distance |
 | des escaliers | 3 fois la distance |
 | des pavés | 1,25 fois la distance |
 
-Mesuré sur de vraies données OpenStreetMap, sur 540 boucles générées à Paris
-et à Lyon : **sans cette pondération, un parcours traverse 1,4 feu par
-kilomètre ; avec, il en traverse 0,04 à 0,15.** Un planificateur ordinaire
-fait d'ailleurs pire que le hasard, parce qu'il suit les grands axes, et que
-c'est exactement là que sont les feux.
+Le coût d'un feu n'est pas un chiffre en l'air : c'est **la distance qu'on
+aurait parcourue pendant qu'on attendait**. Une trentaine de secondes
+d'attente, soit 83 m à six minutes au kilomètre. Il suit donc l'allure
+réglée.
+
+Mesuré sur de vraies données OpenStreetMap, boucles de 6 km :
+
+| | au plus court | avec Runa | |
+|---|---|---|---|
+| Montréal, Plateau Mont-Royal | 45,6 feux | **4,0** | 42 arrêts en moins |
+| Paris 11e | 49,1 | **9,0** | 40 en moins |
+| Lyon, Croix-Rousse | 32,1 | **5,0** | 27 en moins |
+
+À une trentaine de secondes par feu, cela fait une vingtaine de minutes
+d'attente en moins sur une sortie d'une heure.
+
+### Le piège qui rendait ces chiffres faux
+
+⚠️ Une première version annonçait « aucun feu » sur des parcours où l'on
+s'arrêtait quinze fois. La raison tient à un détail de modélisation
+OpenStreetMap : **un piéton qui traverse une intersection à feu ne passe pas
+par le nœud posé au milieu de la chaussée**, il passe par le passage piéton.
+L'app ne comptait que les nœuds de chaussée, alors que 62 % d'un parcours
+suit les trottoirs.
+
+Mesuré avant correction, sur 36 boucles de 5 km : 1,3 feu compté par boucle à
+Montréal contre 14,7 réellement traversés, et 0,1 contre 26,2 à Paris. Un
+passage piéton signalisé compte désormais comme un feu, et l'app l'évite au
+même titre.
+
+### Pourquoi la carte montre autant de lignes
+
+Parce qu'elles existent. À Montréal, OpenStreetMap cartographie chaque
+trottoir comme une ligne à part : dans un extrait du Plateau, **3 345
+trottoirs et 2 716 passages piétons pour 632 rues résidentielles**. Un simple
+croisement, ce sont deux chaussées, quatre trottoirs et jusqu'à quatre
+passages.
+
+C'est une bonne nouvelle pour courir : 62 % d'un parcours suit les trottoirs
+et 12 % les ruelles. Mais les dessiner toutes du même trait donnait un plat
+de spaghettis, alors la carte les hiérarchise : les grands axes en clair et
+épais, les chaussées lisibles, les trottoirs discrets et seulement une fois
+qu'on a zoomé.
 
 ### Une carte sans fournisseur de tuiles
 
@@ -333,7 +371,7 @@ runa/
     donnees.js          téléchargement et cache IndexedDB par tuile
     carte.js            la carte, sur un canvas
     app.js              l'assemblage, aucun calcul
-  tests/                58 tests, `npm test` ou `node --test tests/*.test.js`
+  tests/                68 tests, `npm test` ou `node --test tests/*.test.js`
 ```
 
 ### Le réseau, et quand il sert
