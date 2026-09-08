@@ -1207,7 +1207,26 @@ $('quitter').addEventListener('click', () => {
   });
 })();
 
+/* La version vit dans `sw.js` et nulle part ailleurs : on la lui demande. */
+function afficherLaVersion() {
+  const el = $('version');
+  if (!el || !navigator.serviceWorker) return;
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.runa === 'version') el.textContent = 'Runa ' + e.data.version;
+  });
+  const demander = () => {
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ runa: 'version' });
+    }
+  };
+  demander();
+  // Au tout premier lancement, aucun service worker ne contrôle encore la
+  // page : on redemande quand il prend la main.
+  navigator.serviceWorker.addEventListener('controllerchange', demander);
+}
+
 lireReglages();
+afficherLaVersion();
 peindreReglages();
 if (etat.depart) carte.montrer(null, etat.depart);
 
@@ -1217,7 +1236,17 @@ if (etat.depart) carte.montrer(null, etat.depart);
    demander au réseau. Sinon la carte reste noire jusqu'au premier appui, ce
    qui se lit comme une panne. */
 if (etat.depart) {
-  assurerQuartier(distancePour(etat.duree * 60, etat.allure), { reseau: false })
+  const cible = distancePour(etat.duree * 60, etat.allure);
+  assurerQuartier(cible, { reseau: false })
+    .then(trouve => {
+      /* ⚠️ Rien en mémoire ne veut pas dire « tant pis ». C'est ce que ça
+         voulait dire, et ça laissait une carte NOIRE au lancement : après
+         une mise à jour qui vide le stock de quartiers, ou simplement sur un
+         téléphone neuf, plus rien ne s'affichait tant qu'on n'était pas
+         retourné dans les réglages chercher des boucles. On va donc les
+         chercher, avec la barre de progression pour le dire. */
+      if (!trouve) return assurerQuartier(cible).then(() => dire(null));
+    })
     .catch(() => {});
 }
 

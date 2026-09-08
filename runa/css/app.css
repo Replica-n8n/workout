@@ -491,3 +491,7 @@ button.secondaire {
 .pastille { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .pastille.faite { background: #5b6bb0; }
 .pastille.terrain { background: rgba(91, 107, 176, .55); height: 10px; border-radius: 3px; }
+
+/* La version, discrète mais lisible : sans elle, impossible de savoir
+   téléphone en main si la mise à jour est bien arrivée. */
+#version { opacity: .55; font-size: .7rem; margin-top: -4px; }

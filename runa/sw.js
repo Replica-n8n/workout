@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [
@@ -95,6 +95,17 @@ self.addEventListener('activate', e => {
       }
     }
   })());
+});
+
+/* La page ne peut pas connaître la version : elle ne vit que dans ce
+   fichier, et c'est bien ainsi. Elle la DEMANDE donc, et on répond. Sans ça
+   il n'y a aucun moyen de savoir, téléphone en main, quelle version tourne
+   vraiment — ce qui rend toute vérification impossible après un
+   déploiement. */
+self.addEventListener('message', e => {
+  if (e.data && e.data.runa === 'version' && e.source) {
+    e.source.postMessage({ runa: 'version', version: VERSION });
+  }
 });
 
 self.addEventListener('fetch', e => {
