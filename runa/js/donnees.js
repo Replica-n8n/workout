@@ -217,22 +217,3 @@ export async function charger(centre, rayonM, boite, avance, signal) {
 export async function chargerDuCache(centre, rayonM) {
   return lire(centre, rayonM);
 }
-
-/** Combien de quartiers sont déjà en mémoire. */
-export async function quartiersEnCache() {
-  const db = await ouvrir();
-  return new Promise(ok => {
-    const t = db.transaction(MAGASIN, 'readonly').objectStore(MAGASIN).count();
-    t.onsuccess = () => ok(t.result);
-    t.onerror = () => ok(0);
-  });
-}
-
-export async function viderCache() {
-  const db = await ouvrir();
-  return new Promise(ok => {
-    const t = db.transaction(MAGASIN, 'readwrite').objectStore(MAGASIN).clear();
-    t.onsuccess = () => ok(true);
-    t.onerror = () => ok(false);
-  });
-}

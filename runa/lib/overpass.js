@@ -111,18 +111,3 @@ export function aireKm2(b) {
 export function poidsEstime(b) {
   return aireKm2(b) * OCTETS_PAR_KM2;
 }
-
-/** Fusionne plusieurs réponses Overpass en une seule, sans doublons. */
-export function fusionner(reponses) {
-  const vus = new Set();
-  const elements = [];
-  for (const r of reponses) {
-    for (const el of r.elements || []) {
-      const cle = el.type[0] + el.id;
-      if (vus.has(cle)) continue;
-      vus.add(cle);
-      elements.push(el);
-    }
-  }
-  return { elements };
-}

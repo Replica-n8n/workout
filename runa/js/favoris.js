@@ -84,10 +84,3 @@ export function oublier(id) {
 export function combien() {
   return lireTout().length;
 }
-
-/** Tous les ways déjà courus, pour pénaliser ce qu'on connaît déjà. */
-export function waysDejaCourus() {
-  const out = new Set();
-  for (const f of lireTout()) for (const w of f.ways || []) out.add(w);
-  return out;
-}

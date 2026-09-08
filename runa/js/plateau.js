@@ -167,12 +167,6 @@ export function enregistrer(boucle) {
   return ecrire();
 }
 
-export function oublierTout() {
-  cache = vide();
-  terr = null;
-  try { localStorage.removeItem(CLE); } catch (e) {}
-}
-
 /* ------------------------------------------------------------- le bilan */
 
 /**

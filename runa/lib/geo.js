@@ -84,11 +84,6 @@ export function rayonDepart(distanceM) {
   return (distanceM / (2 * Math.PI)) * 0.85;
 }
 
-/** Allure (secondes par km) vers vitesse (mètres par seconde). */
-export function allureVersVitesse(sParKm) {
-  return 1000 / sParKm;
-}
-
 /** Distance parcourue en `secondes` à l'allure `sParKm`. */
 export function distancePour(secondes, sParKm) {
   return (secondes / sParKm) * 1000;
