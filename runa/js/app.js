@@ -540,8 +540,7 @@ async function partager() {
      règle la moitié du problème. */
   let fichier = null;
   try {
-    const restantM = (position && indice != null && b.points)
-      ? metresRestants(b.points, indice, sens) : null;
+    const restantM = position ? metresQuiRestent(b) : null;
     const png = await dessinerPartage({
       boucle: b, graphe: etat.graphe, position,
       carrefour: coin ? coin.nom : null, restantM, allure: etat.allure,
@@ -966,6 +965,19 @@ let precedent = null;
    départ ou à l'arrivée. Seul le chemin déjà parcouru le dit. */
 const DEMARRE_M = 120;
 
+/**
+ * Ce qu'il reste à courir, ou `null` si on ne le sait pas.
+ *
+ * ⚠️ Cette règle était écrite deux fois, et la seconde l'avait oubliée : le
+ * partage annonçait « il me reste 0 km, environ 0 min » à qui partageait
+ * AVANT de partir, ce qui est justement le cas où l'on écrit à quelqu'un
+ * pour qu'il vienne courir avec nous. Une seule fonction, deux appels.
+ */
+function metresQuiRestent(b) {
+  if (!b || !b.points || indice == null) return null;
+  return parcouru < DEMARRE_M ? b.m : metresRestants(b.points, indice, sens);
+}
+
 /* La dernière position relevée, gardée pour le partage : on ne rallume pas
    le GPS juste pour joindre un point qu'on avait il y a dix secondes. */
 let derniereVue = null;
@@ -1026,7 +1038,7 @@ function surPosition(p) {
   carte.suivre(moi, segmentSuivant(b.points, indice, sens, 400));
   if (!recentre) { carte.centrerSur(moi); recentre = true; }
 
-  const reste = parcouru < DEMARRE_M ? b.m : metresRestants(b.points, indice, sens);
+  const reste = metresQuiRestent(b);
   ligne.className = 'pied';
   /* Plus de phrase pour expliquer ce que veut dire le jaune : la flèche le
      dit d'elle-même, et une légende qu'on relit à chaque coup d'oeil est du
