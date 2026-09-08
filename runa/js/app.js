@@ -23,9 +23,12 @@ import { classer, Territoire } from '../lib/score.js';
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
 const CLE_PARCOURS = 'runa-parcours-v1';
-/* Au-delà, le parcours mémorisé n'est plus « celui en cours » mais celui
-   d'avant-hier, et le restaurer au lancement embrouillerait. */
-const PARCOURS_VALIDE_MS = 8 * 3600 * 1000;
+/* Ce qu'on restaure au lancement, c'est une course INTERROMPUE, rien
+   d'autre. Huit heures étaient beaucoup trop : on rouvrait l'app le soir sur
+   la boucle du matin, et il fallait comprendre soi-même qu'il s'agissait
+   d'un vieux parcours. Deux heures couvrent largement la plus longue sortie
+   que l'app propose, une heure de course à l'allure la plus lente. */
+const PARCOURS_VALIDE_MS = 2 * 3600 * 1000;
 
 const DUREES = [20, 30, 40, 50, 60];
 
@@ -177,7 +180,11 @@ function peindreDepart() {
    est choisi, pas gardé en mémoire. */
 
 function sauverParcours(b) {
-  if (!b) { try { localStorage.removeItem(CLE_PARCOURS); } catch (e) {} return; }
+  /* ⚠️ On ne mémorise QUE ce qu'on est en train de courir. Auparavant, ouvrir
+     l'écran des propositions suffisait à enregistrer la boucle regardée, et
+     elle revenait au lancement suivant : on retrouvait sous les yeux un
+     parcours qu'on n'avait jamais commencé. */
+  if (!b || !etat.enCourse) { try { localStorage.removeItem(CLE_PARCOURS); } catch (e) {} return; }
   try {
     localStorage.setItem(CLE_PARCOURS, JSON.stringify({
       quand: Date.now(),
@@ -193,7 +200,11 @@ function sauverParcours(b) {
 function lireParcours() {
   try {
     const r = JSON.parse(localStorage.getItem(CLE_PARCOURS));
-    if (!r || !r.points || Date.now() - r.quand > PARCOURS_VALIDE_MS) return null;
+    if (!r || !r.points) return null;
+    // Une course commencée, et récente : les deux, sinon on rouvre sur autre
+    // chose que ce qu'on attendait.
+    if (r.enCourse !== true) return null;
+    if (Date.now() - r.quand > PARCOURS_VALIDE_MS) return null;
     return { ...r, points: r.points.map(([lat, lon]) => ({ lat, lon })), noeuds: [] };
   } catch (e) { return null; }
 }
@@ -1219,7 +1230,7 @@ if (recu) {
   etat.choisie = 0;
   // Rouvrir l'app en pleine course doit rendre l'écran de course, pas la
   // liste des propositions : c'est tout l'intérêt de retrouver son parcours.
-  etat.enCourse = enCoursDeCourse.enCourse !== false;
+  etat.enCourse = true;
   $('resume').textContent = 'Parcours en cours';
   ouvrirResultats();
 }
