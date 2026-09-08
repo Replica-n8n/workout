@@ -342,6 +342,16 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
   if (!etat.boucles.length) {
     carte.cadrerAutour(etat.depart, rayon * 0.75);
     carte.montrer(null, etat.depart);
+  } else {
+    /* ⚠️ Les rues viennent d'arriver, et il y a déjà un tracé à l'écran :
+       sans ce dessin elles restent en mémoire sans jamais apparaître. C'est
+       ce qui donnait, en rouvrant l'app sur un parcours en cours, une
+       silhouette verte flottant sur du noir.
+
+       `dessiner` et non `montrer` : `montrer` remet le surlignage et la
+       position à zéro, ce qui les ferait disparaître en pleine course
+       jusqu'à la relevée GPS suivante. */
+    carte.dessiner();
   }
   $('astuce').hidden = false;   // il y a une carte, on peut le dire
   return true;
@@ -597,15 +607,7 @@ function ouvrirRecu(recu) {
      propre message d'état. Le résultat, vu en vrai : les rues arrivaient
      mais restaient invisibles, sous un « Mise en mémoire... » qui ne
      partait plus. */
-  assurerQuartier(recu.m)
-    .then(() => {
-      carte.montrer(b, etat.depart);
-      // `montrer` remet le surlignage à zéro : on repose le point de la
-      // personne après, sinon il disparaît quand les rues arrivent.
-      if (recu.position) carte.suivre(recu.position, null);
-    })
-    .catch(() => {})
-    .finally(() => dire(null));
+  assurerQuartier(recu.m).catch(() => {}).finally(() => dire(null));
 }
 
 /* ------------------------------------------------------- mon quartier */
