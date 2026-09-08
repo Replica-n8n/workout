@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recoller, surLaRue, meilleurTroncon, Place, placerLesRues } from '../lib/etiquettes.js';
+import { recoller, surLaRue, meilleurTroncon, Place, placerLesRues,
+         candidatsDeRues, poserDesCandidats } from '../lib/etiquettes.js';
 
 /* ------------------------------------------------------------- recoller */
 
@@ -120,4 +121,32 @@ test('une longue rue est nommée deux fois, jamais trois', () => {
 
 test('rien à placer ne casse rien', () => {
   assert.deepEqual(placerLesRues(new Map(), new Place(100, 100), largeurDe), []);
+});
+
+/* ----------------------------------------- candidats et pose séparés */
+
+test('les candidats se calculent une fois, se posent à chaque zoom', () => {
+  /* La carte qu'on déplace ne peut pas refaire le tour du graphe à chaque
+     image : recoller et chercher les tronçons droits se fait UNE FOIS, en
+     mètres ; seul le placement dépend du zoom. */
+  const parNom = new Map([['Rue Longue', [[[0, 300], [800, 300]]]]]);
+  const cands = candidatsDeRues(parNom);
+  assert.equal(cands.length, 1);
+  assert.equal(cands[0].nom, 'Rue Longue');
+
+  // Deux poses successives depuis les MÊMES candidats, sans les recalculer.
+  const a = poserDesCandidats(cands, new Place(1000, 600), t => t.length * 11);
+  const b = poserDesCandidats(cands, new Place(1000, 600), t => t.length * 11);
+  assert.deepEqual(a, b, 'poser ne doit pas abîmer les candidats');
+  assert.equal(a.length, 1);
+});
+
+test('poser ne modifie pas la liste qu’on lui donne', () => {
+  const cands = candidatsDeRues(new Map([
+    ['Petite', [[[0, 100], [200, 100]]]],
+    ['Grande', [[[0, 300], [900, 300]]]]
+  ]));
+  const avant = cands.map(c => c.nom).join(',');
+  poserDesCandidats(cands, new Place(1000, 600), t => t.length * 11);
+  assert.equal(cands.map(c => c.nom).join(','), avant, 'le tri doit se faire sur une copie');
 });

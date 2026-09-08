@@ -31,6 +31,13 @@ html, body {
   height: 100dvh;
   margin: 0;
   overscroll-behavior: none;
+  /* ⚠️ Troisième tentative sur l'ascenseur fantôme, et la dernière :
+     `100dvh` seul ne suffisait pas sur un vrai téléphone, où la barre
+     d'adresse, les zones sûres et les arrondis de pixels donnent un ou deux
+     pixels de trop que je n'ai jamais pu reproduire en émulation. Plutôt
+     que de continuer à deviner, on interdit le défilement de la PAGE : elle
+     est dessinée pour tenir dans l'écran. */
+  overflow: hidden;
 }
 
 body {
@@ -154,6 +161,11 @@ body {
 /* -------------------------------------------------------------- panneau */
 
 #panneau {
+  /* Et si un panneau devenait vraiment trop grand, c'est LUI qui défile,
+     pas la page : rien ne devient inatteignable. */
+  max-height: 78dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--panneau);
   border-top: 1px solid var(--trait);
   padding: 12px 12px calc(12px + env(safe-area-inset-bottom));

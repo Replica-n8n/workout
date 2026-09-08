@@ -347,6 +347,7 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
      coûterait un dixième de seconde pour un nom de carrefour. */
   etat.carrefours = indexerCarrefours(etat.graphe);
   etat.reperes = reperes(osm);
+  carte.poserReperes(etat.reperes);
   // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
   // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
   // tracé construit dans l'ancien repère se retrouverait décalé de plusieurs

@@ -148,9 +148,8 @@ export class Place {
  * @param {object} o
  * @returns {{texte:string,x:number,y:number,angle:number}[]}
  */
-export function placerLesRues(parNom, place, largeurDe, o = {}) {
-  const { hauteur = 29, ecartMinimal = 300, parRue = 2, debordement = 0.7 } = o;
-
+export function candidatsDeRues(parNom, o = {}) {
+  const { ecartMinimal = 300, parRue = 2 } = o;
   const candidats = [];
   for (const [nom, morceaux] of parNom) {
     const trouves = [];
@@ -171,10 +170,21 @@ export function placerLesRues(parNom, place, largeurDe, o = {}) {
     }
     for (const t of gardees) candidats.push({ ...t, nom });
   }
+  return candidats;
+}
 
+/**
+ * Pose des candidats déjà calculés.
+ *
+ * Séparé de `candidatsDeRues` pour la carte qu'on déplace : recoller les
+ * morceaux et chercher les tronçons droits se fait UNE FOIS par quartier, en
+ * mètres ; seul le placement, qui dépend du zoom, se refait à l'écran.
+ */
+export function poserDesCandidats(candidats, place, largeurDe, o = {}) {
+  const { hauteur = 29, debordement = 0.7 } = o;
   // Les plus longues d'abord : si la place manque, mieux vaut perdre une
   // ruelle qu'une avenue.
-  candidats.sort((a, b) => b.L - a.L);
+  candidats = candidats.slice().sort((a, b) => b.L - a.L);
 
   const posees = [];
   for (const c of candidats) {
@@ -191,4 +201,8 @@ export function placerLesRues(parNom, place, largeurDe, o = {}) {
     posees.push({ texte: c.nom, x: c.milieu[0], y: c.milieu[1], angle });
   }
   return posees;
+}
+
+export function placerLesRues(parNom, place, largeurDe, o = {}) {
+  return poserDesCandidats(candidatsDeRues(parNom, o), place, largeurDe, o);
 }

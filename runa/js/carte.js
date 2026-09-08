@@ -14,6 +14,8 @@
    rues, leurs noms, et le tracé. Pour choisir entre trois boucles, ça suffit.
    ========================================================================= */
 
+import { Place, candidatsDeRues, poserDesCandidats } from '../lib/etiquettes.js';
+
 const R = 6371008.8, RAD = Math.PI / 180;
 
 /* ---------------------------------------------------------- les couleurs
@@ -41,6 +43,22 @@ const MOI = '#ffffff';
    parcours du jour, et deux verts sur un fond sombre ne se distinguent plus
    à bout de bras, au soleil. */
 const COURUE = '#5b6bb0';
+
+/* Les noms, sur la carte comme sur l'image partagée. Communauto, Bixi et
+   ParkUsher écrivent le nom de chaque rue le long de la rue : c'est ce qui
+   permet de se situer sans rien toucher. */
+const NOM_DE_RUE = '#7e8896';
+const PARC = '#6bbd8c';
+const STATION = '#b5a3f0';
+const TABLE = '#e0ac4d';
+const CORPS_NOM = 12;
+
+/* En deçà, un nom de rue n'est plus qu'une trace grise sur une autre : la
+   carte se lit mieux sans. Mesuré sur un téléphone, c'est autour d'un
+   cinquième de pixel par mètre que ça bascule. */
+const ECHELLE_NOMS = 0.2;
+
+const VRAIE_RUE = /^(residential|tertiary|secondary|primary|living_street|unclassified|pedestrian)$/;
 const TERRAIN = 'rgba(91, 107, 176, 0.30)';
 const TERRAIN_BORD = 'rgba(142, 162, 255, 0.55)';
 
@@ -114,6 +132,10 @@ export class Carte {
     this.courues = null;      // les rues déjà prises, en Path2D
     this.terrain = null;      // le terrain déjà encerclé, en Path2D
     this.quartier = false;    // l'écran « Mon quartier » les montre, pas l'autre
+    this.candidats = [];      // les noms de rues, en mètres, calculés une fois
+    this.reperes = null;      // parcs, stations, tables, en mètres
+    this.nomsPoses = null;    // le résultat du dernier placement
+    this.nomsPour = '';       // la vue pour laquelle il a été fait
     this.echelle = 0.35;      // pixels par mètre
     this.centre = { x: 0, y: 0 };
     this.brancher();
@@ -160,6 +182,35 @@ export class Carte {
       }
     }
     this.traces = traces;
+
+    /* ⚠️ Les candidats se calculent EN MÈTRES, une seule fois par quartier.
+       Recoller les morceaux de rue et chercher leurs tronçons droits coûte
+       le tour complet du graphe : le refaire à chaque image pendant qu'on
+       déplace la carte serait injouable. L'échelle étant uniforme, un
+       tronçon droit en mètres reste droit à l'écran. */
+    const parNom = new Map();
+    const vusNom = new Set();
+    for (const [de, liste] of graphe.voisins) {
+      for (const a of liste) {
+        if (de > a.vers) continue;
+        const cle = de + ':' + a.vers;
+        if (vusNom.has(cle)) continue;
+        vusNom.add(cle);
+        const t = graphe.ways.get(a.way);
+        if (!t || !t.name || !VRAIE_RUE.test(t.highway)) continue;
+        const n1 = graphe.noeuds.get(de), n2 = graphe.noeuds.get(a.vers);
+        if (!n1 || !n2) continue;
+        const m1 = this.versM(n1), m2 = this.versM(n2);
+        const l = parNom.get(t.name) || [];
+        l.push([[m1.x, m1.y], [m2.x, m2.y]]);
+        parNom.set(t.name, l);
+      }
+    }
+    // 300 m entre deux étiquettes d'une même rue, comme les 300 px de l'image
+    // à son échelle habituelle.
+    this.candidats = candidatsDeRues(parNom, { ecartMinimal: 300 });
+    this.nomsPoses = null;
+
     this.feux = [...graphe.feux]
       .filter(id => graphe.noeuds.has(id))
       .map(id => this.versM(graphe.noeuds.get(id)));
@@ -223,6 +274,20 @@ export class Carte {
       combien++;
     }
     this.terrain = combien ? p : null;
+  }
+
+  /**
+   * Les repères à nommer : parcs, stations, tables.
+   *
+   * Gardés en mètres pour la même raison que les rues : seul le placement
+   * dépend du zoom.
+   */
+  poserReperes(r) {
+    this.reperes = null;
+    if (!r || !this.origine) return;
+    const enM = liste => (liste || []).map(o => ({ nom: o.nom, ...this.versM(o) }));
+    this.reperes = { parcs: enM(r.parcs), stations: enM(r.stations), tables: enM(r.tables) };
+    this.nomsPoses = null;
   }
 
   /** Cadre la vue sur une boucle, avec une marge. */
@@ -321,6 +386,109 @@ export class Carte {
       }
     }
     this.dessiner();
+  }
+
+  /**
+   * Les noms de rues et de repères, en pixels.
+   *
+   * Le placement dépend du zoom et du centre : on le refait quand la vue a
+   * changé, jamais pendant qu'elle ne bouge pas. Sans ce cache, chaque doigt
+   * qui glisse relancerait un placement complet.
+   */
+  dessinerLesNoms(ctx, e, largeur, hauteur, dpr) {
+    if (!this.candidats.length && !this.reperes) return;
+
+    const vue = `${e.toFixed(4)}:${Math.round(this.centre.x)}:${Math.round(this.centre.y)}:`
+              + `${Math.round(largeur)}:${Math.round(hauteur)}`;
+    if (vue !== this.nomsPour) {
+      this.nomsPour = vue;
+      this.nomsPoses = this.calculerLesNoms(ctx, e, largeur, hauteur);
+    }
+    if (!this.nomsPoses) return;
+
+    /* On sort du repère en mètres : le texte se dessine à sa taille, pas à
+       celle de la carte. */
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.lineJoin = 'round';
+    ctx.textBaseline = 'middle';
+
+    for (const r of this.nomsPoses.reperes) {
+      ctx.fillStyle = r.pastille;
+      if (r.carre) ctx.fillRect(r.x - 4, r.y - 4, 8, 8);
+      else { ctx.beginPath(); ctx.arc(r.x, r.y, 3.5, 0, 7); ctx.fill(); }
+      ctx.textAlign = r.aDroite ? 'left' : 'right';
+      this.ecrire(ctx, r.nom, r.aDroite ? r.x + 8 : r.x - 8, r.y, r.couleur, 600, 3);
+    }
+
+    ctx.textAlign = 'center';
+    for (const l of this.nomsPoses.rues) {
+      ctx.save();
+      ctx.translate(l.x, l.y);
+      ctx.rotate(l.angle);
+      this.ecrire(ctx, l.texte, 0, 0, NOM_DE_RUE, 500, 3);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  ecrire(ctx, texte, x, y, couleur, graisse, halo) {
+    ctx.font = `${graisse} ${CORPS_NOM}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    ctx.strokeStyle = '#0d0f12';
+    ctx.lineWidth = halo;
+    ctx.strokeText(texte, x, y);
+    ctx.fillStyle = couleur;
+    ctx.fillText(texte, x, y);
+  }
+
+  /** Choisit ce qui tient à l'écran, dans le repère en pixels. */
+  calculerLesNoms(ctx, e, largeur, hauteur) {
+    const place = new Place(largeur, hauteur);
+    const versEcran = (mx, my) => [
+      (mx - this.centre.x) * e + largeur / 2,
+      (my - this.centre.y) * e + hauteur / 2
+    ];
+    ctx.font = `500 ${CORPS_NOM}px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+    const largeurDe = t => ctx.measureText(t).width;
+
+    /* Les repères d'abord : ils sont peu nombreux et ce sont les plus forts.
+       On ne garde que ceux qui sont à l'écran, triés par distance au centre
+       de la vue, parce que c'est là qu'on regarde. */
+    const reperes = [];
+    if (this.reperes) {
+      const familles = [
+        [this.reperes.stations, STATION, '#5b48a8', true, 3],
+        [this.reperes.parcs, PARC, '#3f7d5c', false, 5],
+        [this.reperes.tables, TABLE, '#9a7326', false, 7]
+      ];
+      for (const [liste, couleur, pastille, carre, combien] of familles) {
+        const proches = liste
+          .map(o => { const [x, y] = versEcran(o.x, o.y); return { ...o, x, y }; })
+          .filter(o => o.x > 0 && o.x < largeur && o.y > 0 && o.y < hauteur)
+          .sort((a, b) => Math.hypot(a.x - largeur / 2, a.y - hauteur / 2)
+                        - Math.hypot(b.x - largeur / 2, b.y - hauteur / 2))
+          .slice(0, combien);
+        for (const o of proches) {
+          const larg = largeurDe(o.nom) + 14;
+          const aDroite = o.x + 8 + larg <= largeur;
+          const cx = aDroite ? o.x + larg / 2 + 8 : o.x - larg / 2 - 8;
+          if (!place.poser(cx, o.y, larg, CORPS_NOM + 6)) continue;
+          reperes.push({ ...o, couleur, pastille, carre, aDroite });
+        }
+      }
+    }
+
+    /* Puis les rues. Les candidats sont en mètres : l'échelle étant uniforme
+       et l'axe vertical inversé, l'angle change de signe et la longueur se
+       multiplie. */
+    const cands = [];
+    for (const c of this.candidats) {
+      const [x, y] = versEcran(c.milieu[0], c.milieu[1]);
+      if (x < -80 || x > largeur + 80 || y < -40 || y > hauteur + 40) continue;
+      cands.push({ nom: c.nom, milieu: [x, y], angle: -c.angle, L: c.L * e });
+    }
+    const rues = poserDesCandidats(cands, place, largeurDe, { hauteur: CORPS_NOM + 6 });
+    return { reperes, rues };
   }
 
   /** Recentre sur un point sans changer le zoom. */
@@ -450,6 +618,11 @@ export class Carte {
       ctx.fill();
       ctx.stroke();
     }
+
+    /* Les noms en dernier : ils doivent se lire par-dessus tout, et c'est le
+       seul ordre qui le garantisse. Ils sont dessinés en pixels, hors du
+       repère transformé, sinon le texte serait étiré par l'échelle. */
+    if (e >= ECHELLE_NOMS) this.dessinerLesNoms(ctx, e, largeur, hauteur, dpr);
 
     if (this.moi) {
       // Un disque plein, plus gros que le rond du départ : en courant, on
