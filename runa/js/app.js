@@ -128,6 +128,19 @@ function peindreReglages() {
     b.sorties === 1 ? '1 sortie · ' + b.km + ' km'
                     : b.sorties + ' sorties · ' + b.km + ' km';
 
+  /* ⚠️ Se repeint à CHAQUE affichage, jamais une seule fois au lancement.
+     Le bouton était posé au démarrage et n'en bougeait plus : après avoir
+     quitté un parcours par « Changer de parcours » puis « Réglages », qui
+     efface la mémoire, il restait là et ressuscitait le parcours abandonné.
+     Son âge, lui, restait figé à celui du lancement : « il y a 15 min »
+     encore vrai deux heures plus tard. */
+  const repris = lireParcours();
+  $('reprendre').hidden = !repris;
+  if (repris) {
+    $('reprendre').textContent =
+      `Reprendre le parcours commencé ${ageEnMots(Date.now() - repris.quand)}`;
+  }
+
   const n = favoris.combien();
   $('ouvrir-favoris').hidden = n === 0;
   $('favoris-combien').textContent = n === 1 ? '1 parcours gardé' : `${n} parcours gardés`;
@@ -1267,32 +1280,25 @@ if (etat.depart) {
    dans une messagerie, c'est ce qu'on veut voir. */
 const recu = location.hash.startsWith('#p=') ? decoder(location.hash.slice(3)) : null;
 
-const enCoursDeCourse = recu ? null : lireParcours();
-if (recu) {
-  ouvrirRecu(recu);
-} else if (enCoursDeCourse) {
-  /* ⚠️ L'app ne peut pas SAVOIR si on la rouvre en pleine course ou pour
-     préparer la sortie du lendemain. J'ai essayé de le deviner à l'ancienneté
-     du parcours, et ça se trompe : on retombait sur l'écran de course en
-     voulant simplement en chercher une autre.
+if (recu) ouvrirRecu(recu);
 
-     Alors on ne devine plus. L'app ouvre TOUJOURS sur les réglages, et
-     propose de reprendre en un bouton. Un geste de plus quand on reprend
-     vraiment, aucune surprise le reste du temps. */
-  /* « Reprendre le parcours de 0 min » ne veut rien dire, et « de 27 min »
-     se lit comme une durée de parcours plutôt que comme son âge. On réutilise
-     la formule déjà employée pour l'âge du départ. */
-  $('reprendre').hidden = false;
-  $('reprendre').textContent =
-    `Reprendre le parcours commencé ${ageEnMots(Date.now() - enCoursDeCourse.quand)}`;
-  $('reprendre').addEventListener('click', () => {
-    etat.boucles = [enCoursDeCourse];
-    etat.choisie = 0;
-    etat.enCourse = true;
-    $('resume').textContent = 'Parcours en cours';
-    ouvrirResultats();
-  });
-}
+/* ⚠️ L'app ne peut pas SAVOIR si on la rouvre en pleine course ou pour
+   préparer la sortie du lendemain. Deviner à l'ancienneté se trompe : on
+   retombait sur l'écran de course en voulant simplement chercher une autre
+   boucle. Elle ouvre donc TOUJOURS sur les réglages et propose de reprendre
+   en un bouton, peint par `peindreReglages` depuis la mémoire.
+
+   Le gestionnaire relit la mémoire AU MOMENT DU CLIC : garder le parcours
+   dans une variable du lancement le faisait revivre après son effacement. */
+$('reprendre').addEventListener('click', () => {
+  const p = lireParcours();
+  if (!p) { peindreReglages(); return; }
+  etat.boucles = [p];
+  etat.choisie = 0;
+  etat.enCourse = true;
+  $('resume').textContent = 'Parcours en cours';
+  ouvrirResultats();
+});
 
 
 /* -------------------------------------------------------- installation
