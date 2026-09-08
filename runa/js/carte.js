@@ -37,6 +37,13 @@ const TRACE_ATTENUE = '#2f6b4c'; // le parcours, pendant la course
 const SUITE = '#facc15';         // les 400 prochains mètres
 const MOI = '#ffffff';
 
+/* L'indigo dit « déjà fait ». Il ne peut pas être vert : le vert est le
+   parcours du jour, et deux verts sur un fond sombre ne se distinguent plus
+   à bout de bras, au soleil. */
+const COURUE = '#5b6bb0';
+const TERRAIN = 'rgba(91, 107, 176, 0.30)';
+const TERRAIN_BORD = 'rgba(142, 162, 255, 0.55)';
+
 /* ------------------------------------------------- la hiérarchie des voies
 
    ⚠️ Tout était dessiné du même trait, et un simple croisement de deux rues
@@ -104,6 +111,9 @@ export class Carte {
     this.restant = null;      // les prochains mètres, surlignés
     this.moi = null;          // la position en direct
     this.depart = null;
+    this.courues = null;      // les rues déjà prises, en Path2D
+    this.terrain = null;      // le terrain déjà encerclé, en Path2D
+    this.quartier = false;    // l'écran « Mon quartier » les montre, pas l'autre
     this.echelle = 0.35;      // pixels par mètre
     this.centre = { x: 0, y: 0 };
     this.brancher();
@@ -153,6 +163,66 @@ export class Carte {
     this.feux = [...graphe.feux]
       .filter(id => graphe.noeuds.has(id))
       .map(id => this.versM(graphe.noeuds.get(id)));
+  }
+
+  /**
+   * Les rues déjà prises, en un seul tracé.
+   *
+   * Reconstruit à chaque ouverture de l'écran plutôt que gardé : la liste
+   * grandit à chaque sortie, et un Path2D périmé dessinerait une rue de
+   * moins sans que rien ne le signale.
+   */
+  chargerCourues(graphe, ways) {
+    this.courues = null;
+    if (!graphe || !ways || !ways.size || !this.origine) return;
+    const p = new Path2D();
+    const vus = new Set();
+    let combien = 0;
+    for (const [de, liste] of graphe.voisins) {
+      for (const a of liste) {
+        if (de > a.vers || !ways.has(a.way)) continue;
+        const cle = de + ':' + a.vers;
+        if (vus.has(cle)) continue;
+        vus.add(cle);
+        const n1 = graphe.noeuds.get(de), n2 = graphe.noeuds.get(a.vers);
+        if (!n1 || !n2) continue;
+        const m1 = this.versM(n1), m2 = this.versM(n2);
+        p.moveTo(m1.x, m1.y);
+        p.lineTo(m2.x, m2.y);
+        combien++;
+      }
+    }
+    this.courues = combien ? p : null;
+  }
+
+  /**
+   * Le terrain encerclé : un seul chemin, tous les contours fermés.
+   *
+   * ⚠️ Toutes les boucles sont remises dans le même sens avant d'être
+   * ajoutées. Le canevas remplit selon la règle nonzero : deux contours de
+   * sens contraires se trouent mutuellement au lieu de s'unir, et on verrait
+   * apparaître des lacunes là où deux sorties se chevauchent.
+   */
+  poserTerrain(contours) {
+    this.terrain = null;
+    if (!contours || !contours.length || !this.origine) return;
+    const p = new Path2D();
+    let combien = 0;
+    for (const points of contours) {
+      if (!points || points.length < 3) continue;
+      const m = points.map(q => this.versM(q));
+      let aire = 0;
+      for (let i = 0, n = m.length; i < n; i++) {
+        const a = m[i], b = m[(i + 1) % n];
+        aire += a.x * b.y - b.x * a.y;
+      }
+      const suite = aire < 0 ? m.slice().reverse() : m;
+      p.moveTo(suite[0].x, suite[0].y);
+      for (let i = 1; i < suite.length; i++) p.lineTo(suite[i].x, suite[i].y);
+      p.closePath();
+      combien++;
+    }
+    this.terrain = combien ? p : null;
   }
 
   /** Cadre la vue sur une boucle, avec une marge. */
@@ -296,6 +366,21 @@ export class Carte {
         ctx.lineWidth = v.largeur / e;
         ctx.stroke(this.traces[nom]);
       }
+    }
+
+    /* Les deux couches de l'écran « Mon quartier ». Sous les feux et sous le
+       parcours du jour : ce sont un fond, pas le sujet. */
+    if (this.quartier && this.terrain) {
+      ctx.fillStyle = TERRAIN;
+      ctx.fill(this.terrain);
+      ctx.strokeStyle = TERRAIN_BORD;
+      ctx.lineWidth = 1.5 / e;
+      ctx.stroke(this.terrain);
+    }
+    if (this.quartier && this.courues) {
+      ctx.strokeStyle = COURUE;
+      ctx.lineWidth = 3 / e;
+      ctx.stroke(this.courues);
     }
 
     if (this.feux && e > 0.12) {

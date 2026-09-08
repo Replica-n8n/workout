@@ -4,3 +4,6 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# Les maquettes pesent 8 Mo : livrees en fichier, pas versionnees.
+runa/maquettes/

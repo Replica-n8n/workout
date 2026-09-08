@@ -35,6 +35,11 @@
       <button class="secondaire" id="ma-position">Ma position</button>
     </div>
 
+    <button class="option" id="ouvrir-quartier" hidden>
+      <span class="coche rond-plein" aria-hidden="true">&#9679;</span>
+      <span class="nom">Mon quartier<span class="sous" id="quartier-combien"></span></span>
+    </button>
+
     <button class="option" id="ouvrir-favoris" hidden>
       <span class="coche etoile" aria-hidden="true">&#9733;</span>
       <span class="nom">Mes parcours<span class="sous" id="favoris-combien"></span></span>
@@ -69,6 +74,11 @@
   <div id="resultats" hidden>
 
     <div id="choix">
+      <div class="onglets" role="tablist" aria-label="Façon de choisir les boucles">
+        <button class="ong" id="ong-decouverte" role="tab" aria-selected="true">Découverte</button>
+        <button class="ong" id="ong-conquete" role="tab" aria-selected="false">Conquête</button>
+      </div>
+      <p class="pied" id="mode-quoi"></p>
       <p class="titre" id="resume"></p>
       <div id="boucles"></div>
       <button class="principal" id="suivre">Suivre ce parcours</button>
@@ -86,6 +96,20 @@
       </div>
     </div>
 
+  </div>
+
+  <div id="monquartier" hidden>
+    <p class="titre">Mon quartier</p>
+    <div class="jauge">
+      <div class="chiffre"><b id="q-gros">0 km</b><span id="q-mot">de rues déjà prises</span></div>
+      <div class="barre" id="q-barre" hidden><i></i></div>
+      <p class="detail-jauge" id="q-detail"></p>
+    </div>
+    <div class="legende-carte">
+      <span><i class="pastille faite"></i>déjà couru</span>
+      <span><i class="pastille terrain"></i>terrain encerclé</span>
+    </div>
+    <button class="secondaire" id="fermer-quartier" style="margin-top:10px">Retour</button>
   </div>
 
   <div id="mesparcours" hidden>

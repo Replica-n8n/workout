@@ -14,6 +14,8 @@ import { charger, chargerDuCache } from './donnees.js';
 import { MARGE_ZONE } from '../lib/overpass.js';
 import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
+import * as plateau from './plateau.js';
+import { classer, Territoire } from '../lib/score.js';
 
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
@@ -35,7 +37,25 @@ const etat = {
   boucles: [],
   choisie: 0,
   enCourse: false,
+  mode: 'decouverte',   // ou 'conquete'
   graine: 1
+};
+
+/* Le mode change ce qu'on cherche, pas seulement ce qu'on affiche :
+   découverte classe les candidates aux mètres de rues jamais prises,
+   conquête au terrain qu'elles ajoutent. Mesuré sur douze sorties, les deux
+   ne désignent jamais la même boucle. */
+const MODES = {
+  decouverte: {
+    titre: 'Découverte',
+    quoi: 'Partez d’où vous voulez : Runa cherche les rues que vous n’avez '
+        + 'pas encore prises.'
+  },
+  conquete: {
+    titre: 'Conquête',
+    quoi: '⚠️ À partir du même point, le terrain cesse vite de grandir. '
+        + 'Déplacez votre départ pour gagner du quartier.'
+  }
 };
 
 const carte = new Carte($('carte'));
@@ -50,7 +70,8 @@ function lireReglages() {
       duree: r.duree ?? 30,
       allure: r.allure ?? 360,
       eviterFeux: r.eviterFeux ?? true,
-      nuit: r.nuit ?? false
+      nuit: r.nuit ?? false,
+      mode: r.mode === 'conquete' ? 'conquete' : 'decouverte'
     });
   } catch (e) { /* premier lancement, ou stockage refusé */ }
 }
@@ -59,7 +80,7 @@ function ecrireReglages() {
   try {
     localStorage.setItem(CLE, JSON.stringify({
       depart: etat.depart, duree: etat.duree, allure: etat.allure,
-      eviterFeux: etat.eviterFeux, nuit: etat.nuit
+      eviterFeux: etat.eviterFeux, nuit: etat.nuit, mode: etat.mode
     }));
   } catch (e) {}
 }
@@ -92,6 +113,14 @@ function peindreReglages() {
      annonce la fonction, c'est le bouton « Garder » pendant la course, au
      moment où elle a un sens : un « Mes parcours (0) » sur l'écran de
      départ ne serait que du bruit. */
+  /* Même règle que pour les favoris : une ligne à zéro n'est que du bruit.
+     Ce qui annonce la fonction, ce sont les onglets au moment de choisir. */
+  const b = plateau.bilan();
+  $('ouvrir-quartier').hidden = b.sorties === 0;
+  $('quartier-combien').textContent =
+    b.sorties === 1 ? '1 sortie · ' + b.km + ' km'
+                    : b.sorties + ' sorties · ' + b.km + ' km';
+
   const n = favoris.combien();
   $('ouvrir-favoris').hidden = n === 0;
   $('favoris-combien').textContent = n === 1 ? '1 parcours gardé' : `${n} parcours gardés`;
@@ -312,6 +341,49 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
   return true;
 }
 
+/* ----------------------------------------------- classer les candidates */
+
+/**
+ * Garde les trois meilleures selon le mode, et pose sur chacune la phrase
+ * qui dit pourquoi elle est là.
+ */
+function retenir(candidates, cible) {
+  const dejaCourues = plateau.dejaCourues();
+  /* Une trame neuve à chaque recherche : `classer` ne fait qu'interroger,
+     elle ne peint pas, et repartir de l'état enregistré évite qu'une
+     recherche précédente ait déjà « pris » le terrain de celle-ci. */
+  const terr = etat.mode === 'conquete' ? plateau.territoire() : null;
+
+  const notees = classer(candidates, {
+    mode: etat.mode,
+    graphe: etat.graphe,
+    dejaCourues,
+    territoire: terr,
+    distanceCible: cible,
+    combien: 3
+  });
+
+  return notees.map(n => {
+    const b = n.b;
+    if (etat.mode === 'conquete') {
+      const km2 = n.gainM2 / 1e6;
+      b.score = km2 < 0.005 ? 'aucun terrain nouveau'
+              : `+ ${km2.toFixed(2)} km² de terrain`;
+    } else {
+      /* Le POURCENTAGE, pas les kilomètres : c'est sur la part que les
+         candidates sont classées, et afficher autre chose donnait une liste
+         qui avait l'air mal triée (4,5 km au-dessus de 4,9 km, parce que la
+         première boucle était plus courte). */
+      const pct = Math.round(n.part * 100);
+      b.score = dejaCourues.size === 0
+        ? null                              // première sortie : tout est neuf
+        : pct < 1 ? 'que des rues déjà prises'
+                  : `${pct} % de rues nouvelles`;
+    }
+    return b;
+  });
+}
+
 /* --------------------------------------------------------------- action */
 
 let enCours = false;
@@ -338,13 +410,19 @@ async function chercher(nouvelleGraine) {
     dire('Calcul des boucles...');
     if (nouvelleGraine) etat.graine = (etat.graine + 1) % 100000;
 
-    etat.boucles = genererBoucles(etat.graphe, {
+    /* Huit candidates au lieu de trois, puis on classe. Ce n'est pas un
+       luxe : mesuré à la dixième sortie, la meilleure des huit est à 67 %
+       d'inédit et la pire à 29 %. Choisir double le résultat, là où la
+       pénalité « déjà couru » du graphe ne fait qu'orienter. */
+    const candidates = genererBoucles(etat.graphe, {
       depart: etat.depart,
       distanceCible: cible,
-      graine: etat.graine
+      graine: etat.graine,
+      nb: 8
     });
 
-    if (!etat.boucles.length) throw new Error('rien');
+    if (!candidates.length) throw new Error('rien');
+    etat.boucles = retenir(candidates, cible);
 
     etat.choisie = 0;
     etat.enCourse = false;
@@ -379,6 +457,60 @@ function message(e) {
   if (e && e.message === 'rien') return 'Aucune boucle trouvée ici à cette distance. Essayez une autre durée.';
   if (e && e.message === 'reseau') return 'Pas de réseau, et ce quartier n’est pas encore en mémoire.';
   return 'Échec : ' + (e && e.message ? e.message : 'inconnu');
+}
+
+/* ------------------------------------------------------- mon quartier */
+
+function ouvrirQuartier() {
+  $('reglages').hidden = true;
+  $('resultats').hidden = true;
+  $('monquartier').hidden = false;
+  arreterSuivi();
+  peindreQuartier();
+}
+
+function fermerQuartier() {
+  $('monquartier').hidden = true;
+  $('reglages').hidden = false;
+  carte.quartier = false;
+  carte.dessiner();
+  peindreReglages();
+}
+
+function peindreQuartier() {
+  const b = plateau.bilan();
+  const part = plateau.partDuQuartier(etat.graphe, etat.depart);
+
+  /* Le gros chiffre est le pourcentage quand on peut l'établir honnêtement,
+     c'est-à-dire quand un quartier est chargé pour servir de dénominateur.
+     Sinon des kilomètres, qui ne demandent rien à personne. */
+  if (part) {
+    $('q-gros').textContent = Math.round(part.part * 100) + ' %';
+    $('q-mot').textContent = 'des rues autour de vous';
+    $('q-barre').hidden = false;
+    $('q-barre').firstElementChild.style.width = Math.round(part.part * 100) + '%';
+    $('q-detail').textContent =
+      `${part.km.toFixed(1)} km de rues sur les ${part.kmTotal.toFixed(0)} km à moins d’un kilomètre, `
+      + `en ${b.sorties} sortie${b.sorties > 1 ? 's' : ''}. `
+      + `${b.km2} km² de terrain encerclé.`;
+  } else {
+    $('q-gros').textContent = b.km + ' km';
+    $('q-mot').textContent = 'de rues déjà prises';
+    $('q-barre').hidden = true;
+    $('q-detail').textContent =
+      `${b.sorties} sortie${b.sorties > 1 ? 's' : ''}, ${b.km2} km² de terrain encerclé.`;
+  }
+
+  /* Les deux couches ne se dessinent que sur cet écran : sur la carte
+     d'accueil, le tracé vert du jour traverserait de l'indigo au lieu de se
+     détacher sur du gris. */
+  carte.chargerCourues(etat.graphe, plateau.dejaCourues());
+  carte.poserTerrain(plateau.contours());
+  carte.quartier = true;
+  carte.trace = null;
+  carte.restant = null;
+  if (etat.depart) carte.cadrerAutour(etat.depart, 1400);
+  carte.dessiner();
 }
 
 /* ----------------------------------------------------- parcours gardés */
@@ -476,6 +608,13 @@ function nommer(nom) {
 /* L'attribut aria-label ne rend pas le HTML : il le lirait balise par balise. */
 const texteBrut = html => html.replace(/<[^>]+>/g, '');
 
+function peindreOnglets() {
+  for (const m of ['decouverte', 'conquete']) {
+    $('ong-' + m).setAttribute('aria-selected', String(etat.mode === m));
+  }
+  $('mode-quoi').textContent = MODES[etat.mode].quoi;
+}
+
 function montrerResultats(cible) {
   // Le temps de calcul n'a rien à faire là : c'est une information de
   // développeur, elle n'aide personne à choisir une boucle.
@@ -489,7 +628,10 @@ function montrerResultats(cible) {
    passe par ici sans avoir ni cible ni durée de calcul à afficher. */
 function ouvrirResultats() {
   $('reglages').hidden = true;
+  $('monquartier').hidden = true;
   $('resultats').hidden = false;
+  carte.quartier = false;
+  peindreOnglets();
   peindreMode();
   peindreCartes();
 
@@ -557,14 +699,21 @@ function peindreCartes() {
     if (rue) prises.add(rue.nom);
     const par = rue ? `par ${nommer(rue.nom)}` : '';
 
+    /* Le critère qui manquait pour trancher entre trois boucles de même
+       longueur. Il n'apparaît que s'il a été calculé : une boucle restaurée
+       au lancement ou reprise d'un favori n'a pas de score, et inventer un
+       « 0 % » serait pire que se taire. */
+    const score = b.score == null ? '' : `<span class="score">${b.score}</span>`;
+
     el.innerHTML =
       `<span class="km">${(b.m / 1000).toFixed(2)} km</span>` +
-      `<span class="detail">${par}<br>${feux} · ${minutes} min${eclaire}</span>` +
+      `<span class="detail">${par}<br>${feux} · ${minutes} min${eclaire}${score}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
       (rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
-      `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}, environ ${minutes} minutes`);
+      `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}, environ ${minutes} minutes` +
+      (b.score ? `, ${b.score}` : ''));
     el.addEventListener('click', () => { etat.choisie = i; ouvrirResultats(); });
     zone.appendChild(el);
   });
@@ -723,7 +872,12 @@ $('chercher').addEventListener('click', () => chercher(false));
 $('autres').addEventListener('click', () => chercher(true));
 $('retour').addEventListener('click', () => {
   $('resultats').hidden = true;
+  $('monquartier').hidden = true;
   $('reglages').hidden = false;
+  // Repeindre : sans ça l'indigo de « Mon quartier » reste à l'écran jusqu'au
+  // prochain dessin, et on croit que la carte a changé de couleur.
+  carte.quartier = false;
+  carte.dessiner();
   etat.enCourse = false;
   sauverParcours(null);
   arreterSuivi();
@@ -732,6 +886,22 @@ $('retour').addEventListener('click', () => {
   // l'écran annonçait toujours zéro.
   peindreReglages();
 });
+
+$('ouvrir-quartier').addEventListener('click', ouvrirQuartier);
+$('fermer-quartier').addEventListener('click', fermerQuartier);
+
+for (const m of ['decouverte', 'conquete']) {
+  $('ong-' + m).addEventListener('click', () => {
+    if (etat.mode === m) return;
+    etat.mode = m;
+    ecrireReglages();
+    peindreOnglets();
+    /* Changer de mode change le classement, donc les propositions. Les
+       recalculer sur place évite d'afficher trois boucles choisies pour
+       l'autre jeu sous l'onglet qui vient d'être sélectionné. */
+    if (!etat.enCourse) chercher(false);
+  });
+}
 
 $('ouvrir-favoris').addEventListener('click', ouvrirFavoris);
 $('fermer-favoris').addEventListener('click', fermerFavoris);
@@ -755,6 +925,11 @@ $('garder').addEventListener('click', () => {
 $('suivre').addEventListener('click', () => {
   etat.enCourse = true;
   peindreMode();
+  /* C'est ici qu'une rue devient « courue ». On a hésité avec « Garder »,
+     qui existe déjà : mais on garde un parcours qu'on compte REFAIRE, pas
+     seulement un qu'on a fait. Deux ou trois favoris pour dix sorties, le
+     compteur sous-compterait massivement. */
+  plateau.enregistrer(etat.boucles[etat.choisie]);
   sauverParcours(etat.boucles[etat.choisie]);
   // Le panneau vient de rétrécir : la carte a plus de place, on la recadre.
   const b = etat.boucles[etat.choisie];

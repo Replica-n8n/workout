@@ -398,3 +398,68 @@ button.secondaire {
 }
 
 .vide { color: var(--gris); font-size: .88rem; font-style: italic; margin: 0; }
+
+/* ------------------------------------------------- découverte et conquête */
+
+/* Deux jeux, pas deux habillages : mesuré sur douze sorties, les boucles
+   retenues par l'un et par l'autre ne se recouvrent qu'à 9 % en médiane. */
+.onglets {
+  display: flex;
+  gap: 6px;
+  background: var(--case);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 6px;
+}
+.ong {
+  flex: 1;
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--gris);
+  font: inherit;
+  font-weight: 600;
+}
+.ong[aria-selected="true"] {
+  background: var(--fond);
+  color: var(--texte);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+#mode-quoi { margin: 0 0 8px; }
+
+/* Le score de la boucle selon le mode : c'est le critère qui manquait pour
+   trancher entre trois boucles de même longueur. */
+.score {
+  display: block;
+  color: #8ea2ff;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* -------------------------------------------------------- mon quartier */
+
+#monquartier { display: flex; flex-direction: column; gap: 10px; }
+#monquartier[hidden] { display: none; }
+#ouvrir-quartier[hidden] { display: none; }
+.coche.rond-plein { background: var(--case); border-color: var(--trait); color: #8ea2ff; }
+
+.jauge { display: flex; flex-direction: column; gap: 8px; }
+.chiffre { display: flex; align-items: baseline; gap: 8px; }
+.chiffre b {
+  font-size: 2.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #8ea2ff;
+}
+.chiffre span { color: var(--gris); font-size: .9rem; }
+.barre { height: 10px; background: var(--case); border-radius: 5px; overflow: hidden; }
+.barre[hidden] { display: none; }
+.barre i { display: block; height: 100%; background: #5b6bb0; border-radius: 5px; }
+.detail-jauge { margin: 0; font-size: .82rem; color: var(--gris); }
+
+.legende-carte { display: flex; gap: 16px; font-size: .78rem; color: var(--gris); }
+.legende-carte span { display: flex; align-items: center; gap: 6px; }
+.pastille { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.pastille.faite { background: #5b6bb0; }
+.pastille.terrain { background: rgba(91, 107, 176, .55); height: 10px; border-radius: 3px; }
