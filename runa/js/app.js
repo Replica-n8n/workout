@@ -351,7 +351,13 @@ function retenir(candidates, cible) {
   /* Une trame neuve à chaque recherche : `classer` ne fait qu'interroger,
      elle ne peint pas, et repartir de l'état enregistré évite qu'une
      recherche précédente ait déjà « pris » le terrain de celle-ci. */
-  const terr = etat.mode === 'conquete' ? plateau.territoire() : null;
+  /* ⚠️ Sans sortie enregistrée il n'y a pas d'ancre, donc pas de trame, et
+     `classer` recevait null : chaque boucle était notée à zéro et l'app
+     annonçait « aucun terrain nouveau » sur les trois propositions, alors que
+     TOUT était nouveau. Une trame vierge ancrée sur le départ dit la
+     vérité : la première boucle prend tout ce qu'elle enferme. */
+  const terr = etat.mode !== 'conquete' ? null
+             : (plateau.territoire() || new Territoire(etat.depart));
 
   const notees = classer(candidates, {
     mode: etat.mode,
@@ -407,6 +413,7 @@ async function chercher(nouvelleGraine) {
     }
 
     dire('Calcul des boucles...');
+    normaliserMode();
     if (nouvelleGraine) etat.graine = (etat.graine + 1) % 100000;
 
     /* Huit candidates au lieu de trois, puis on classe. Ce n'est pas un
@@ -607,7 +614,48 @@ function nommer(nom) {
 /* L'attribut aria-label ne rend pas le HTML : il le lirait balise par balise. */
 const texteBrut = html => html.replace(/<[^>]+>/g, '');
 
+/* La phrase d'accueil ne se montre qu'une fois. */
+const CLE_MODES_VUS = 'runa-modes-vus';
+
+/**
+ * Ramène le mode à ce qui a un sens dans l'état actuel.
+ *
+ * ⚠️ À appeler AVANT de chercher, pas seulement avant de peindre : la
+ * remise à zéro se faisait dans `peindreOnglets`, donc après que les boucles
+ * avaient déjà été notées. Un téléphone qui avait connu le mode conquête
+ * puis perdu son historique affichait des kilomètres carrés sous des onglets
+ * cachés, ce qui est exactement l'incompréhension qu'on cherchait à éviter.
+ */
+function normaliserMode() {
+  if (!plateau.combienDeSorties() && etat.mode !== 'decouverte') {
+    etat.mode = 'decouverte';
+    ecrireReglages();
+  }
+}
+
 function peindreOnglets() {
+  /* Au premier lancement, le choix N'EXISTE PAS : sans historique, les deux
+     onglets classent les mêmes boucles de la même façon. Proposer un choix
+     qui ne change rien est ce qui rend l'app incompréhensible, bien plus
+     qu'un manque d'explication. Les onglets apparaissent donc quand ils
+     commencent à départager quelque chose, comme « Mes parcours » et
+     « Mon quartier » n'existent qu'une fois qu'il y a de quoi les remplir. */
+  const sorties = plateau.combienDeSorties();
+  $('onglets').hidden = sorties === 0;
+
+  normaliserMode();
+
+  let note = false;
+  if (sorties >= 1) {
+    try {
+      note = !localStorage.getItem(CLE_MODES_VUS);
+      if (note) localStorage.setItem(CLE_MODES_VUS, '1');
+    } catch (e) { note = false; }
+  }
+  // `hidden` ne se remet pas à true tout seul : une fois lue, la phrase doit
+  // disparaître au rendu suivant, pas rester jusqu'au rechargement.
+  if (note) $('mode-note').hidden = false;
+
   for (const m of ['decouverte', 'conquete']) {
     $('ong-' + m).setAttribute('aria-selected', String(etat.mode === m));
   }
@@ -661,6 +709,11 @@ function ouvrirResultats() {
 function peindreMode() {
   $('choix').hidden = !!etat.enCourse;
   $('course').hidden = !etat.enCourse;
+  /* « Suivre ce parcours » enregistre la sortie APRÈS le dernier rendu de
+     l'écran de choix. Sans ce repeint, revenir par « Changer de parcours »
+     juste après la toute première sortie montrait encore l'écran sans
+     onglets, alors qu'ils avaient de quoi exister. */
+  peindreOnglets();
   peindreGarder();
 }
 

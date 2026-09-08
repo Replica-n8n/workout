@@ -74,11 +74,14 @@
   <div id="resultats" hidden>
 
     <div id="choix">
-      <div class="onglets" role="tablist" aria-label="Façon de choisir les boucles">
+      <div class="onglets" id="onglets" role="tablist" aria-label="Façon de choisir les boucles" hidden>
         <button class="ong" id="ong-decouverte" role="tab" aria-selected="true">Découverte</button>
         <button class="ong" id="ong-conquete" role="tab" aria-selected="false">Conquête</button>
       </div>
-      <p class="pied" id="mode-quoi"></p>
+      <p class="note" id="mode-note" hidden>Runa sait maintenant par où vous avez couru.
+        <b>Découverte</b> cherche les rues qui vous manquent ;
+        <b>Conquête</b> compte le terrain que vos boucles encerclent.</p>
+      <p class="pied" id="mode-quoi" hidden></p>
       <p class="titre" id="resume"></p>
       <div id="boucles"></div>
       <button class="principal" id="suivre">Suivre ce parcours</button>

@@ -435,6 +435,20 @@ button.secondaire {
 }
 #mode-quoi { margin: 0; }
 #mode-quoi[hidden] { display: none; }
+#onglets[hidden] { display: none; }
+
+/* La phrase qui remplace le popup d'accueil : même texte, mais lue au moment
+   où elle sert, sans rien bloquer, et une seule fois. */
+.note {
+  margin: 0;
+  font-size: .82rem;
+  color: var(--texte);
+  background: #1a2333;
+  border-left: 3px solid #5b6bb0;
+  padding: 9px 11px;
+  border-radius: 0 8px 8px 0;
+}
+.note[hidden] { display: none; }
 
 /* Le score de la boucle selon le mode : c'est le critère qui manquait pour
    trancher entre trois boucles de même longueur. */
