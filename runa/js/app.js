@@ -48,8 +48,7 @@ const etat = {
 const MODES = {
   decouverte: {
     titre: 'Découverte',
-    quoi: 'Partez d’où vous voulez : Runa cherche les rues que vous n’avez '
-        + 'pas encore prises.'
+    quoi: null            // le nom de l'onglet suffit, la carte prend la place
   },
   conquete: {
     titre: 'Conquête',
@@ -612,7 +611,13 @@ function peindreOnglets() {
   for (const m of ['decouverte', 'conquete']) {
     $('ong-' + m).setAttribute('aria-selected', String(etat.mode === m));
   }
-  $('mode-quoi').textContent = MODES[etat.mode].quoi;
+  /* La phrase n'apparaît que quand elle apprend quelque chose. En découverte
+     elle ne faisait que répéter le nom de l'onglet, pour 44 px pris à la
+     carte, qui est ce qu'on regarde. En conquête c'est un avertissement qui
+     change ce qu'on va faire : rester au même départ ne rapporte plus rien. */
+  const quoi = MODES[etat.mode].quoi;
+  $('mode-quoi').textContent = quoi || '';
+  $('mode-quoi').hidden = !quoi;
 }
 
 function montrerResultats(cible) {

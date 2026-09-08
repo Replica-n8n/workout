@@ -20,8 +20,15 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+/* ⚠️ `height: 100%` sur `html` se résout sur le bloc conteneur initial,
+   c'est-à-dire sur le GRAND viewport, celui d'un navigateur mobile dont la
+   barre d'adresse serait masquée. Le corps de page, lui, fait 100dvh, donc
+   la hauteur réellement visible. Résultat sur un téléphone : `html` dépasse
+   d'exactement la hauteur de la barre d'adresse, et un ascenseur apparaît
+   alors que rien ne déborde. Invisible sur un écran d'ordinateur, où les
+   deux mesures sont égales : trouvé sur un Pixel 9a sous Brave. */
 html, body {
-  height: 100%;
+  height: 100dvh;
   margin: 0;
   overscroll-behavior: none;
 }
@@ -426,7 +433,8 @@ button.secondaire {
   color: var(--texte);
   box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
 }
-#mode-quoi { margin: 0 0 8px; }
+#mode-quoi { margin: 0; }
+#mode-quoi[hidden] { display: none; }
 
 /* Le score de la boucle selon le mode : c'est le critère qui manquait pour
    trancher entre trois boucles de même longueur. */

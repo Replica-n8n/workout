@@ -266,6 +266,14 @@ export class Carte {
   montrer(boucle, depart) {
     this.poserOrigine(depart || (boucle && boucle.points[0]));
     this.trace = null;
+    /* ⚠️ Le surlignage et la flèche appartiennent à la boucle qu'on suivait,
+       pas à celle qu'on affiche. Sans cette remise à zéro, ils restaient à
+       l'écran par-dessus le nouveau tracé jusqu'à la prochaine relevée du
+       GPS, soit quelques secondes, en montrant un sens qui n'était plus le
+       bon. */
+    this.restant = null;
+    this.pointe = null;
+    this.moi = null;
     if (!this.origine) return;
 
     if (boucle && boucle.points.length) {
