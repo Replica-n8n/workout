@@ -15,6 +15,7 @@ import { MARGE_ZONE } from '../lib/overpass.js';
 import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
 import * as plateau from './plateau.js';
+import { encoder, decoder } from '../lib/partage.js';
 import { classer, Territoire } from '../lib/score.js';
 
 const $ = id => document.getElementById(id);
@@ -413,6 +414,7 @@ async function chercher(nouvelleGraine) {
     }
 
     dire('Calcul des boucles...');
+    $('recu').hidden = true;
     normaliserMode();
     if (nouvelleGraine) etat.graine = (etat.graine + 1) % 100000;
 
@@ -463,6 +465,117 @@ function message(e) {
   if (e && e.message === 'rien') return 'Aucune boucle trouvée ici à cette distance. Essayez une autre durée.';
   if (e && e.message === 'reseau') return 'Pas de réseau, et ce quartier n’est pas encore en mémoire.';
   return 'Échec : ' + (e && e.message ? e.message : 'inconnu');
+}
+
+/* ---------------------------------------------------------- partager */
+
+/**
+ * ⚠️ Un PWA n'émet plus rien dès que l'écran s'éteint : le suivi GPS
+ * s'arrête en arrière-plan et le système gèle l'onglet. Un partage « en
+ * direct » enverrait donc une position au départ puis plus rien, pendant que
+ * la personne en face croit suivre quelqu'un. On partage une position
+ * DATÉE, prise au moment où l'on touche le bouton, et le texte le dit.
+ */
+function texteDuPartage(b, position) {
+  const km = (b.m / 1000).toFixed(2);
+  const rue = (b.rues || [])[0];
+  const par = rue ? `, par ${texteBrut(nommer(rue.nom))}` : '';
+  return position
+    ? `Je cours une boucle de ${km} km${par}. Voici où j'en suis.`
+    : `Ma boucle du jour : ${km} km${par}.`;
+}
+
+async function partager() {
+  const b = etat.boucles[etat.choisie];
+  if (!b) return;
+
+  // La position du moment si on l'a déjà sous la main. On ne RELANCE pas le
+  // GPS pour l'occasion : ça ferait attendre debout au coin d'une rue.
+  const position = derniereVue
+    ? { lat: derniereVue.lat, lon: derniereVue.lon, quand: derniereVue.quand || Date.now() }
+    : null;
+
+  const paquet = encoder(b, position);
+  if (!paquet) return direUnMoment('Ce parcours ne peut pas être partagé.', true);
+
+  const lien = location.origin + location.pathname + '#p=' + paquet;
+  const texte = texteDuPartage(b, position);
+
+  /* `navigator.share` ouvre le menu de partage du téléphone, celui qu'on
+     connaît déjà. Il n'existe pas partout : sans lui, on copie, et on le
+     DIT, sinon le bouton a l'air de ne rien faire. */
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Runa', text: texte, url: lien });
+      return;
+    }
+    await navigator.clipboard.writeText(texte + ' ' + lien);
+    direUnMoment('Lien copié : collez-le dans un message.');
+  } catch (e) {
+    // Fermer le menu de partage n'est pas une erreur : ne rien dire.
+    if (e && e.name === 'AbortError') return;
+    direUnMoment('Le partage n’a pas pu s’ouvrir.', true);
+  }
+}
+
+/* ------------------------------------------------------ parcours reçu */
+
+function ageEnPhrase(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 2) return 'à l’instant';
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.round(min / 60);
+  return h < 24 ? `il y a ${h} h` : 'hier ou avant';
+}
+
+/**
+ * Ouvre un parcours reçu par lien. Le tracé s'affiche TOUT DE SUITE, sans
+ * réseau : les rues autour arrivent ensuite si elles peuvent. L'inverse
+ * donnerait un écran noir pendant deux mégaoctets de téléchargement, pour
+ * un lien qu'on vient de toucher dans une messagerie.
+ */
+function ouvrirRecu(recu) {
+  /* ⚠️ `feux: null` et non zéro. Le lien ne transporte qu'un tracé : on
+     ignore les feux et l'éclairage tant que les rues ne sont pas chargées.
+     Annoncer « aucun feu » par défaut serait le mensonge exact corrigé en
+     1.1.0, où l'app disait ça là où l'on s'arrêtait quinze fois. */
+  const b = { m: recu.m, points: recu.points, noeuds: [], ways: new Set(),
+              feux: null, rues: [], fractionEclairee: null, score: null };
+  etat.boucles = [b];
+  etat.choisie = 0;
+  etat.enCourse = false;
+  etat.depart = { ...recu.points[0], source: 'partage', quand: Date.now() };
+
+  $('resume').textContent = `Parcours reçu · ${(recu.m / 1000).toFixed(2)} km`;
+  $('recu').hidden = false;
+  $('recu').innerHTML = recu.position
+    ? `Parcours partagé avec vous. Sa position, <b>${ageEnPhrase(recu.position.quand)}</b>, `
+      + `est le point blanc.`
+    : 'Parcours partagé avec vous.';
+
+  carte.poserOrigine(etat.depart);
+  carte.cadrer(recu.points);
+  carte.montrer(b, etat.depart);
+  if (recu.position) carte.suivre(recu.position, null);
+  ouvrirResultats();
+
+  /* Les rues, ensuite, sans bloquer l'affichage du tracé.
+
+     ⚠️ Deux choses que `assurerQuartier` ne fait PAS quand il est appelé
+     seul, hors de `chercher` : il construit les tracés de rues sans les
+     peindre dès lors qu'une boucle est déjà affichée, et il n'efface pas son
+     propre message d'état. Le résultat, vu en vrai : les rues arrivaient
+     mais restaient invisibles, sous un « Mise en mémoire... » qui ne
+     partait plus. */
+  assurerQuartier(recu.m)
+    .then(() => {
+      carte.montrer(b, etat.depart);
+      // `montrer` remet le surlignage à zéro : on repose le point de la
+      // personne après, sinon il disparaît quand les rues arrivent.
+      if (recu.position) carte.suivre(recu.position, null);
+    })
+    .catch(() => {})
+    .finally(() => dire(null));
 }
 
 /* ------------------------------------------------------- mon quartier */
@@ -552,7 +665,8 @@ function peindreFavoris() {
 
     const rue = (f.rues || []).find(r => !prises.has(r.nom)) || (f.rues || [])[0] || null;
     if (rue) prises.add(rue.nom);
-    const feux = f.feux === 0 ? '<b>aucun feu</b>'
+    const feux = f.feux == null ? ''
+               : f.feux === 0 ? '<b>aucun feu</b>'
                : f.feux === 1 ? '<b>1 feu</b>' : `<b>${f.feux} feux</b>`;
     const minutes = Math.round((f.m / 1000) * (etat.allure / 60));
 
@@ -560,7 +674,7 @@ function peindreFavoris() {
       `<button class="ouvrir" type="button">` +
         `<span class="km">${(f.m / 1000).toFixed(2)} km</span>` +
         `<span class="detail">${rue ? 'par ' + nommer(rue.nom) + '<br>' : ''}` +
-        `${feux} · ${minutes} min</span>` +
+        `${feux}${feux ? ' · ' : ''}${minutes} min</span>` +
       `</button>` +
       `<button class="jeter" type="button" aria-label="Oublier ce parcours">&#10005;</button>`;
 
@@ -736,14 +850,18 @@ function peindreCartes() {
     el.setAttribute('aria-pressed', String(i === etat.choisie));
 
     const minutes = Math.round((b.m / 1000) * (etat.allure / 60));
-    const feux = b.feux === 0 ? '<b>aucun feu</b>'
+    // Une boucle reçue par lien n'a pas de compte de feux : on se tait
+    // plutôt que d'inventer un chiffre.
+    const sait = b.feux != null;
+    const feux = !sait ? ''
+               : b.feux === 0 ? '<b>aucun feu</b>'
                : b.feux === 1 ? '<b>1 feu</b>'
                : `<b>${b.feux} feux</b>`;
     // L'éclairage n'est affiché que quand il apprend quelque chose : en mode
     // nocturne, ou quand une part notable du parcours n'est pas éclairée.
     // « 100 % éclairé » sur les trois cartes n'aide personne à choisir et
     // faisait déborder la ligne sur trois lignes en 360 px de large.
-    const parle = etat.nuit || b.fractionEclairee === null || b.fractionEclairee < 0.9;
+    const parle = sait && (etat.nuit || b.fractionEclairee === null || b.fractionEclairee < 0.9);
     const eclaire = !parle ? ''
       : b.fractionEclairee === null ? ' · éclairage inconnu'
       : ` · ${Math.round(b.fractionEclairee * 100)} % éclairé`;
@@ -765,12 +883,13 @@ function peindreCartes() {
 
     el.innerHTML =
       `<span class="km">${(b.m / 1000).toFixed(2)} km</span>` +
-      `<span class="detail">${par}<br>${feux} · ${minutes} min${eclaire}${score}</span>` +
+      `<span class="detail">${par}<br>${feux}${feux ? ' · ' : ''}${minutes} min${eclaire}${score}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
       (rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
-      `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}, environ ${minutes} minutes` +
+      (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') +
+      `, environ ${minutes} minutes` +
       (b.score ? `, ${b.score}` : ''));
     el.addEventListener('click', () => { etat.choisie = i; ouvrirResultats(); });
     zone.appendChild(el);
@@ -800,6 +919,10 @@ let precedent = null;
    départ ou à l'arrivée. Seul le chemin déjà parcouru le dit. */
 const DEMARRE_M = 120;
 
+/* La dernière position relevée, gardée pour le partage : on ne rallume pas
+   le GPS juste pour joindre un point qu'on avait il y a dix secondes. */
+let derniereVue = null;
+
 function demarrerSuivi() {
   if (veille !== null || !navigator.geolocation) return;
   if (!etat.boucles.length) return;
@@ -820,6 +943,7 @@ function arreterSuivi() {
 }
 
 function surPosition(p) {
+  derniereVue = { lat: p.lat, lon: p.lon, quand: Date.now() };
   const b = etat.boucles[etat.choisie];
   if (!b) return;
   const moi = { lat: p.coords.latitude, lon: p.coords.longitude };
@@ -961,6 +1085,7 @@ for (const m of ['decouverte', 'conquete']) {
   });
 }
 
+$('partager').addEventListener('click', partager);
 $('ouvrir-favoris').addEventListener('click', ouvrirFavoris);
 $('fermer-favoris').addEventListener('click', fermerFavoris);
 
@@ -1050,8 +1175,14 @@ if (etat.depart) {
     .catch(() => {});
 }
 
-const enCoursDeCourse = lireParcours();
-if (enCoursDeCourse) {
+/* Un lien reçu passe AVANT le parcours en cours : on vient de le toucher
+   dans une messagerie, c'est ce qu'on veut voir. */
+const recu = location.hash.startsWith('#p=') ? decoder(location.hash.slice(3)) : null;
+
+const enCoursDeCourse = recu ? null : lireParcours();
+if (recu) {
+  ouvrirRecu(recu);
+} else if (enCoursDeCourse) {
   etat.boucles = [enCoursDeCourse];
   etat.choisie = 0;
   // Rouvrir l'app en pleine course doit rendre l'écran de course, pas la

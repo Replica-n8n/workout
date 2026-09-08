@@ -449,6 +449,12 @@ button.secondaire {
   border-radius: 0 8px 8px 0;
 }
 .note[hidden] { display: none; }
+#recu b { color: #8ea2ff; }
+
+/* La mise en garde reste affichée en permanence : une boucle part et revient
+   de chez soi, donc le lien révèle l'adresse de qui l'envoie. Ça se dit
+   avant, pas après. */
+#partage-quoi { margin-top: -4px; }
 
 /* Le score de la boucle selon le mode : c'est le critère qui manquait pour
    trancher entre trois boucles de même longueur. */
