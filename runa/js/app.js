@@ -1259,13 +1259,26 @@ const enCoursDeCourse = recu ? null : lireParcours();
 if (recu) {
   ouvrirRecu(recu);
 } else if (enCoursDeCourse) {
-  etat.boucles = [enCoursDeCourse];
-  etat.choisie = 0;
-  // Rouvrir l'app en pleine course doit rendre l'écran de course, pas la
-  // liste des propositions : c'est tout l'intérêt de retrouver son parcours.
-  etat.enCourse = true;
-  $('resume').textContent = 'Parcours en cours';
-  ouvrirResultats();
+  /* ⚠️ L'app ne peut pas SAVOIR si on la rouvre en pleine course ou pour
+     préparer la sortie du lendemain. J'ai essayé de le deviner à l'ancienneté
+     du parcours, et ça se trompe : on retombait sur l'écran de course en
+     voulant simplement en chercher une autre.
+
+     Alors on ne devine plus. L'app ouvre TOUJOURS sur les réglages, et
+     propose de reprendre en un bouton. Un geste de plus quand on reprend
+     vraiment, aucune surprise le reste du temps. */
+  const minutes = Math.round((Date.now() - enCoursDeCourse.quand) / 60000);
+  $('reprendre').hidden = false;
+  $('reprendre').textContent = minutes < 60
+    ? `Reprendre le parcours de ${minutes} min`
+    : 'Reprendre le parcours en cours';
+  $('reprendre').addEventListener('click', () => {
+    etat.boucles = [enCoursDeCourse];
+    etat.choisie = 0;
+    etat.enCourse = true;
+    $('resume').textContent = 'Parcours en cours';
+    ouvrirResultats();
+  });
 }
 
 

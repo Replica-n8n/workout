@@ -507,3 +507,8 @@ button.secondaire {
 /* La version, discrète mais lisible : sans elle, impossible de savoir
    téléphone en main si la mise à jour est bien arrivée. */
 #version { opacity: .55; font-size: .7rem; margin-top: -4px; }
+
+/* Reprendre une course interrompue : proposé sur l'écran d'accueil, jamais
+   imposé à sa place. */
+.reprendre { background: var(--jaune); color: #2a1e06; }
+.reprendre[hidden] { display: none; }

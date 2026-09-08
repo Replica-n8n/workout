@@ -136,6 +136,7 @@ export class Carte {
     this.reperes = null;      // parcs, stations, tables, en mètres
     this.nomsPoses = null;    // le résultat du dernier placement
     this.nomsPour = '';       // la vue pour laquelle il a été fait
+    this.enGeste = false;     // un doigt déplace ou pince la carte
     this.echelle = 0.35;      // pixels par mètre
     this.centre = { x: 0, y: 0 };
     this.brancher();
@@ -398,13 +399,25 @@ export class Carte {
   dessinerLesNoms(ctx, e, largeur, hauteur, dpr) {
     if (!this.candidats.length && !this.reperes) return;
 
-    const vue = `${e.toFixed(4)}:${Math.round(this.centre.x)}:${Math.round(this.centre.y)}:`
-              + `${Math.round(largeur)}:${Math.round(hauteur)}`;
-    if (vue !== this.nomsPour) {
+    /* ⚠️ On ne REFAIT le choix des noms que quand la vue s'immobilise. En le
+       refaisant à chaque image, les collisions se résolvaient autrement d'une
+       image à l'autre : les noms clignotaient, apparaissaient, disparaissaient
+       pendant qu'on déplace la carte du doigt. Insupportable, et c'est le
+       genre de défaut qu'aucune mesure ne montre.
+
+       Entre deux choix, les mêmes noms suivent simplement la carte : ils sont
+       gardés en mètres et reprojetés à chaque image. */
+    const vue = `${e.toFixed(4)}:${Math.round(largeur)}:${Math.round(hauteur)}`;
+    if (!this.nomsPoses || (vue !== this.nomsPour && !this.enGeste)) {
       this.nomsPour = vue;
       this.nomsPoses = this.calculerLesNoms(ctx, e, largeur, hauteur);
     }
     if (!this.nomsPoses) return;
+
+    const versEcran = (mx, my) => [
+      (mx - this.centre.x) * e + largeur / 2,
+      (my - this.centre.y) * e + hauteur / 2
+    ];
 
     /* On sort du repère en mètres : le texte se dessine à sa taille, pas à
        celle de la carte. */
@@ -414,17 +427,21 @@ export class Carte {
     ctx.textBaseline = 'middle';
 
     for (const r of this.nomsPoses.reperes) {
+      const [x, y] = versEcran(r.mx, r.my);
+      if (x < -60 || x > largeur + 60 || y < -20 || y > hauteur + 20) continue;
       ctx.fillStyle = r.pastille;
-      if (r.carre) ctx.fillRect(r.x - 4, r.y - 4, 8, 8);
-      else { ctx.beginPath(); ctx.arc(r.x, r.y, 3.5, 0, 7); ctx.fill(); }
+      if (r.carre) ctx.fillRect(x - 4, y - 4, 8, 8);
+      else { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 7); ctx.fill(); }
       ctx.textAlign = r.aDroite ? 'left' : 'right';
-      this.ecrire(ctx, r.nom, r.aDroite ? r.x + 8 : r.x - 8, r.y, r.couleur, 600, 3);
+      this.ecrire(ctx, r.nom, r.aDroite ? x + 8 : x - 8, y, r.couleur, 600, 3);
     }
 
     ctx.textAlign = 'center';
     for (const l of this.nomsPoses.rues) {
+      const [x, y] = versEcran(l.mx, l.my);
+      if (x < -120 || x > largeur + 120 || y < -30 || y > hauteur + 30) continue;
       ctx.save();
-      ctx.translate(l.x, l.y);
+      ctx.translate(x, y);
       ctx.rotate(l.angle);
       this.ecrire(ctx, l.texte, 0, 0, NOM_DE_RUE, 500, 3);
       ctx.restore();
@@ -478,17 +495,28 @@ export class Carte {
       }
     }
 
-    /* Puis les rues. Les candidats sont en mètres : l'échelle étant uniforme
-       et l'axe vertical inversé, l'angle change de signe et la longueur se
-       multiplie. */
+    /* Puis les rues. ⚠️ L'angle ne change PAS de signe : `versM` renvoie
+       déjà un axe vertical vers le bas, comme l'écran. Le nier retournait
+       chaque nom autour de l'horizontale, et toutes les rues penchaient du
+       mauvais côté. Seule la longueur se multiplie par l'échelle. */
     const cands = [];
     for (const c of this.candidats) {
       const [x, y] = versEcran(c.milieu[0], c.milieu[1]);
       if (x < -80 || x > largeur + 80 || y < -40 || y > hauteur + 40) continue;
-      cands.push({ nom: c.nom, milieu: [x, y], angle: -c.angle, L: c.L * e });
+      cands.push({ nom: c.nom, milieu: [x, y], angle: c.angle, L: c.L * e });
     }
-    const rues = poserDesCandidats(cands, place, largeurDe, { hauteur: CORPS_NOM + 6 });
-    return { reperes, rues };
+    /* On rend les positions en MÈTRES : c'est ce qui permet de faire suivre
+       les mêmes noms pendant qu'on déplace la carte, sans les rechoisir. */
+    const versM = (x, y) => [
+      (x - largeur / 2) / e + this.centre.x,
+      (y - hauteur / 2) / e + this.centre.y
+    ];
+    const rues = poserDesCandidats(cands, place, largeurDe, { hauteur: CORPS_NOM + 6 })
+      .map(l => { const [mx, my] = versM(l.x, l.y); return { ...l, mx, my }; });
+    return {
+      reperes: reperes.map(r => { const [mx, my] = versM(r.x, r.y); return { ...r, mx, my }; }),
+      rues
+    };
   }
 
   /** Recentre sur un point sans changer le zoom. */
@@ -653,6 +681,7 @@ export class Carte {
       this.c.setPointerCapture(e.pointerId);
       doigts.set(e.pointerId, pos(e));
       depart = this.instantane(doigts);
+      this.enGeste = true;
     });
 
     this.c.addEventListener('pointermove', e => {
@@ -675,6 +704,12 @@ export class Carte {
     const fin = e => {
       doigts.delete(e.pointerId);
       depart = doigts.size ? this.instantane(doigts) : null;
+      if (!doigts.size) {
+        // La carte s'immobilise : c'est le moment de rechoisir les noms.
+        this.enGeste = false;
+        this.nomsPour = '';
+        this.dessiner();
+      }
     };
     this.c.addEventListener('pointerup', fin);
     this.c.addEventListener('pointercancel', fin);
