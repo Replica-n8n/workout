@@ -265,6 +265,20 @@ body {
   font-size: .95rem;
   color: transparent;
 }
+/* ⚠️ Deux de ces lignes ne cochent rien : elles ouvrent un écran. Elles
+   avaient pourtant l'allure exacte d'un interrupteur, ce qu'un audit
+   d'accessibilité relève aussi — elles n'annoncent aucun état parce
+   qu'elles n'en ont pas. Le chevron dit « ça mène ailleurs », et il le dit
+   par la FORME, pas par la couleur. */
+.option .chevron {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--gris);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding-left: 4px;
+}
+
 /* L'étoile des favoris n'est pas une case à cocher : elle est toujours
    pleine, c'est une porte vers une liste. */
 .coche.etoile { background: var(--case); border-color: var(--trait); color: var(--jaune); }
