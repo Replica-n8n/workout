@@ -28,16 +28,19 @@
    alors que rien ne déborde. Invisible sur un écran d'ordinateur, où les
    deux mesures sont égales : trouvé sur un Pixel 9a sous Brave. */
 html, body {
-  height: 100dvh;
   margin: 0;
   overscroll-behavior: none;
-  /* ⚠️ Troisième tentative sur l'ascenseur fantôme, et la dernière :
-     `100dvh` seul ne suffisait pas sur un vrai téléphone, où la barre
-     d'adresse, les zones sûres et les arrondis de pixels donnent un ou deux
-     pixels de trop que je n'ai jamais pu reproduire en émulation. Plutôt
-     que de continuer à deviner, on interdit le défilement de la PAGE : elle
-     est dessinée pour tenir dans l'écran. */
-  overflow: hidden;
+
+  /* ⚠️ Quatrième tentative, et cette fois la bonne unité.
+     · `100dvh` suit la barre d'adresse, mais reste un ou deux pixels trop
+       grand sur un vrai téléphone : d'où l'ascenseur fantôme.
+     · y ajouter `overflow: hidden` a échangé un défaut contre un pire : le
+       bouton principal se retrouvait COUPÉ en bas, sans aucun moyen de
+       l'atteindre.
+     `100svh` est la hauteur quand toutes les barres du navigateur sont
+     visibles, donc la plus petite : la page tient toujours. On perd un peu
+     de place quand la barre se masque, on ne perd jamais un bouton. */
+  height: 100svh;
 }
 
 body {
@@ -163,7 +166,7 @@ body {
 #panneau {
   /* Et si un panneau devenait vraiment trop grand, c'est LUI qui défile,
      pas la page : rien ne devient inatteignable. */
-  max-height: 78dvh;
+  max-height: 82svh;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--panneau);

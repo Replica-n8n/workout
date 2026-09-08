@@ -1279,11 +1279,12 @@ if (recu) {
      Alors on ne devine plus. L'app ouvre TOUJOURS sur les réglages, et
      propose de reprendre en un bouton. Un geste de plus quand on reprend
      vraiment, aucune surprise le reste du temps. */
-  const minutes = Math.round((Date.now() - enCoursDeCourse.quand) / 60000);
+  /* « Reprendre le parcours de 0 min » ne veut rien dire, et « de 27 min »
+     se lit comme une durée de parcours plutôt que comme son âge. On réutilise
+     la formule déjà employée pour l'âge du départ. */
   $('reprendre').hidden = false;
-  $('reprendre').textContent = minutes < 60
-    ? `Reprendre le parcours de ${minutes} min`
-    : 'Reprendre le parcours en cours';
+  $('reprendre').textContent =
+    `Reprendre le parcours commencé ${ageEnMots(Date.now() - enCoursDeCourse.quand)}`;
   $('reprendre').addEventListener('click', () => {
     etat.boucles = [enCoursDeCourse];
     etat.choisie = 0;
