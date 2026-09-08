@@ -16,7 +16,7 @@ import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
 import * as plateau from './plateau.js';
 import { encoder, decoder } from '../lib/partage.js';
-import { indexerCarrefours, carrefourProche } from '../lib/carrefour.js';
+import { indexerCarrefours, carrefourProche, reperes } from '../lib/carrefour.js';
 import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
 
@@ -41,6 +41,7 @@ const etat = {
   graphe: null,
   grapheDe: null,       // le départ pour lequel le graphe a été construit
   carrefours: [],       // les croisements nommés, pour dire où l'on est
+  reperes: null,        // parcs, stations, tables, pour l'image partagée
   boucles: [],
   choisie: 0,
   enCourse: false,
@@ -345,6 +346,7 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
   /* Une fois par quartier, pas à chaque partage : refaire le tour du graphe
      coûterait un dixième de seconde pour un nom de carrefour. */
   etat.carrefours = indexerCarrefours(etat.graphe);
+  etat.reperes = reperes(osm);
   // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
   // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
   // tracé construit dans l'ancien repère se retrouverait décalé de plusieurs
@@ -541,7 +543,8 @@ async function partager() {
       ? metresRestants(b.points, indice, sens) : null;
     const png = await dessinerPartage({
       boucle: b, graphe: etat.graphe, position,
-      carrefour: coin ? coin.nom : null, restantM, allure: etat.allure
+      carrefour: coin ? coin.nom : null, restantM, allure: etat.allure,
+      reperes: etat.reperes
     });
     if (png) fichier = new File([png], 'runa.jpg', { type: 'image/jpeg' });
   } catch (e) {

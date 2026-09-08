@@ -51,9 +51,14 @@ let connexion = null;
 function ouvrir() {
   if (connexion) return connexion;
   connexion = new Promise((ok, ko) => {
-    const r = indexedDB.open(BASE, 1);
+    /* Version 2 : les zones de la version 1 ont été téléchargées sans les
+       points d'intérêt. Les garder donnerait des cartes partagées sans
+       aucun repère, sans que rien ne le signale. On repart de zéro : c'est
+       un téléchargement de plus, une fois. */
+    const r = indexedDB.open(BASE, 2);
     r.onupgradeneeded = () => {
-      if (!r.result.objectStoreNames.contains(MAGASIN)) r.result.createObjectStore(MAGASIN);
+      if (r.result.objectStoreNames.contains(MAGASIN)) r.result.deleteObjectStore(MAGASIN);
+      r.result.createObjectStore(MAGASIN);
     };
     r.onsuccess = () => ok(r.result);
     r.onerror = () => { connexion = null; ko(r.error); };

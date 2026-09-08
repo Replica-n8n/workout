@@ -97,3 +97,40 @@ export function carrefourProche(carrefours, position, loinM = LOIN_M) {
 export function nombre(x, decimales = 1) {
   return x.toFixed(decimales).replace('.', ',');
 }
+
+/* ------------------------------------------------- les points d'intérêt */
+
+/**
+ * Trie les repères d'une réponse Overpass en trois familles.
+ *
+ * Trois, et pas une seule liste : elles ne se dessinent pas pareil et ne
+ * servent pas au même moment. Un parc se voit de loin et ne déménage
+ * jamais ; un café sert à se donner rendez-vous mais change d'enseigne.
+ */
+export function reperes(osm) {
+  const parcs = [], stations = [], tables = [];
+  if (!osm || !osm.elements) return { parcs, stations, tables };
+  for (const el of osm.elements) {
+    const t = el.tags;
+    if (!t || !t.name) continue;
+    const c = el.center ? { lat: el.center.lat, lon: el.center.lon }
+            : (el.lat != null ? { lat: el.lat, lon: el.lon } : null);
+    if (!c) continue;
+    const o = { nom: t.name, lat: c.lat, lon: c.lon };
+    if (t.leisure === 'park' || t.leisure === 'garden' || t.amenity === 'place_of_worship') parcs.push(o);
+    else if (t.railway === 'station' || t.public_transport === 'station') stations.push(o);
+    else if (t.amenity) tables.push(o);
+  }
+  return { parcs, stations, tables };
+}
+
+/** Les plus proches d'un point, les `combien` premières. */
+export function plusProches(liste, point, combien, maxM = Infinity) {
+  if (!liste || !point) return [];
+  const kx = R * RAD * Math.cos(point.lat * RAD), ky = R * RAD;
+  return liste
+    .map(o => ({ ...o, d: Math.hypot((o.lon - point.lon) * kx, (o.lat - point.lat) * ky) }))
+    .filter(o => o.d <= maxM)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, combien);
+}

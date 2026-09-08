@@ -18,6 +18,13 @@ const EXCLUS = [
   'corridor', 'elevator', 'platform'
 ].join('|');
 
+/* Ce qui sert de repère quand on dit où l'on est. Les commerces changent
+   souvent d'enseigne, mais un restaurant périmé sur une carte reste moins
+   trompeur qu'une carte sans aucun repère. */
+const LIEUX = [
+  'restaurant', 'cafe', 'bar', 'pub', 'fast_food', 'place_of_worship'
+].join('|');
+
 /**
  * @param {{sud,ouest,nord,est}} b
  * @param {number} [timeout] secondes accordées au serveur
@@ -29,13 +36,24 @@ export function requete(b, timeout = 90) {
   //   2. la géométrie de ces noeuds SANS leurs tags (`skel`), parce que les
   //      tags de noeud pèsent lourd et ne servent presque jamais
   //   3. les seuls noeuds dont les tags nous intéressent : feux et passages
+  /* Les points d'intérêt viennent avec, dans la même requête : mesuré,
+     170 Ko contre 2 Mo pour les rues, et ce sont eux qui rendent une carte
+     partagée lisible. `out tags center` donne le nom et un point, sans les
+     noeuds du contour dont on n'a que faire. */
   return `[out:json][timeout:${timeout}];
 way["highway"]["highway"!~"^(${EXCLUS})$"]["area"!="yes"](${boite})->.w;
 .w out body;
 node(w.w);
 out skel qt;
 node["highway"~"^(traffic_signals|crossing)$"](${boite});
-out body qt;`;
+out body qt;
+(
+  nwr["amenity"~"^(${LIEUX})$"]["name"](${boite});
+  way["leisure"~"^(park|garden)$"]["name"](${boite});
+  node["railway"="station"]["name"](${boite});
+  node["public_transport"="station"]["name"](${boite});
+);
+out tags center qt;`;
 }
 
 /**
@@ -81,7 +99,7 @@ export const MARGE_ZONE = 150;
    ⚠️ Overpass ne renvoie AUCUN Content-Length sur une réponse en flux : sans
    cette estimation il n'y a pas de barre de progression possible, et une
    barre inventée qui se bloque à 97 % est pire que pas de barre du tout. */
-export const OCTETS_PAR_KM2 = 650e3;
+export const OCTETS_PAR_KM2 = 700e3;   // rues + points d'intérêt
 
 /** L'aire d'une boîte, en km². */
 export function aireKm2(b) {

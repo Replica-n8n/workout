@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.7.2';
+const VERSION = '1.8.0';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [
@@ -34,6 +34,7 @@ const FILES = [
   './lib/score.js',
   './lib/partage.js',
   './lib/carrefour.js',
+  './lib/etiquettes.js',
   './js/image.js',
   './lib/geo.js',
   './lib/graph.js',
@@ -50,9 +51,21 @@ const FILES = [
   './icons/apple-touch-icon.png'
 ];
 
-/* Overpass ne doit JAMAIS passer par le cache de la coquille : ses réponses
-   pèsent des mégaoctets et ont leur propre magasin. */
-const HORS_COQUILLE = /overpass/;
+/* Les réponses de l'API Overpass ne doivent JAMAIS passer par le cache de la
+   coquille : elles pèsent des mégaoctets et ont leur propre magasin.
+
+   ⚠️ La règle était `/overpass/`, qui attrapait aussi NOTRE module
+   `lib/overpass.js`. Deux conséquences, toutes deux vues en vrai :
+
+   · hors ligne, ce module partait au réseau et ne revenait pas. Un import
+     raté fait échouer tout le lot, donc l'app entière, alors qu'il était
+     pourtant bien dans le cache.
+   · en ligne, il était servi par le cache HTTP du navigateur, donc parfois
+     dans une version périmée : l'app fabriquait sa requête avec l'ancien
+     code après une mise à jour, sans que rien ne le signale.
+
+   On ne vise donc que ce qui part vers un serveur Overpass. */
+const HORS_COQUILLE = /^https?:\/\/[^/]*overpass[^/]*\//;
 
 self.addEventListener('install', e => {
   /* `cache: 'reload'` évite qu'addAll() remplisse un cache tout neuf avec
