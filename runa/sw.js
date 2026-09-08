@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.6.0';
+const VERSION = '1.7.0';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [
@@ -33,6 +33,8 @@ const FILES = [
   './js/plateau.js',
   './lib/score.js',
   './lib/partage.js',
+  './lib/carrefour.js',
+  './js/image.js',
   './lib/geo.js',
   './lib/graph.js',
   './lib/route.js',

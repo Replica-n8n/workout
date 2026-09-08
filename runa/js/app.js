@@ -16,6 +16,8 @@ import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
 import * as plateau from './plateau.js';
 import { encoder, decoder } from '../lib/partage.js';
+import { indexerCarrefours, carrefourProche } from '../lib/carrefour.js';
+import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
 
 const $ = id => document.getElementById(id);
@@ -35,6 +37,7 @@ const etat = {
   nuit: false,
   graphe: null,
   grapheDe: null,       // le départ pour lequel le graphe a été construit
+  carrefours: [],       // les croisements nommés, pour dire où l'on est
   boucles: [],
   choisie: 0,
   enCourse: false,
@@ -328,6 +331,9 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
   etat.graphe = plusGrandeComposante(brut);
   etat.grapheDe = { ...etat.depart, rayon, nuit: etat.nuit,
                     eviterFeux: etat.eviterFeux, allure: etat.allure };
+  /* Une fois par quartier, pas à chaque partage : refaire le tour du graphe
+     coûterait un dixième de seconde pour un nom de carrefour. */
+  etat.carrefours = indexerCarrefours(etat.graphe);
   // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
   // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
   // tracé construit dans l'ancien repère se retrouverait décalé de plusieurs
@@ -476,13 +482,16 @@ function message(e) {
  * la personne en face croit suivre quelqu'un. On partage une position
  * DATÉE, prise au moment où l'on touche le bouton, et le texte le dit.
  */
-function texteDuPartage(b, position) {
-  const km = (b.m / 1000).toFixed(2);
+function texteDuPartage(b, position, coin) {
+  const km = (b.m / 1000).toFixed(2).replace('.', ',');
   const rue = (b.rues || [])[0];
   const par = rue ? `, par ${texteBrut(nommer(rue.nom))}` : '';
-  return position
-    ? `Je cours une boucle de ${km} km${par}. Voici où j'en suis.`
-    : `Ma boucle du jour : ${km} km${par}.`;
+  if (!position) return `Ma boucle du jour : ${km} km${par}.`;
+  // Le carrefour aussi dans le texte : une messagerie qui n'affiche pas
+  // l'image laisserait sinon la phrase sans le seul renseignement utile.
+  return coin
+    ? `Je cours une boucle de ${km} km. Je suis au coin de ${coin.nom}.`
+    : `Je cours une boucle de ${km} km${par}. Voici où j'en suis.`;
 }
 
 async function partager() {
@@ -499,12 +508,33 @@ async function partager() {
   if (!paquet) return direUnMoment('Ce parcours ne peut pas être partagé.', true);
 
   const lien = location.origin + location.pathname + '#p=' + paquet;
-  const texte = texteDuPartage(b, position);
+  const coin = position ? carrefourProche(etat.carrefours, position) : null;
+  const texte = texteDuPartage(b, position, coin);
 
-  /* `navigator.share` ouvre le menu de partage du téléphone, celui qu'on
-     connaît déjà. Il n'existe pas partout : sans lui, on copie, et on le
-     DIT, sinon le bouton a l'air de ne rien faire. */
+  /* L'image d'abord : un lien s'affiche comme une adresse nue dans une
+     conversation, l'image se voit tout de suite. On envoie les deux, chacun
+     règle la moitié du problème. */
+  let fichier = null;
   try {
+    const restantM = (position && indice != null && b.points)
+      ? metresRestants(b.points, indice, sens) : null;
+    const png = await dessinerPartage({
+      boucle: b, graphe: etat.graphe, position,
+      carrefour: coin ? coin.nom : null, restantM, allure: etat.allure
+    });
+    if (png) fichier = new File([png], 'runa.jpg', { type: 'image/jpeg' });
+  } catch (e) {
+    // Une image qui ne se dessine pas ne doit pas empêcher de partager.
+  }
+
+  try {
+    /* ⚠️ Le lien va dans le TEXTE, pas dans `url` : plusieurs messageries
+       ne retiennent que l'image et le texte quand un fichier est joint, et
+       laissent tomber `url` sans rien dire. */
+    if (fichier && navigator.canShare && navigator.canShare({ files: [fichier] })) {
+      await navigator.share({ files: [fichier], text: texte + ' ' + lien });
+      return;
+    }
     if (navigator.share) {
       await navigator.share({ title: 'Runa', text: texte, url: lien });
       return;
