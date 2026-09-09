@@ -19,6 +19,7 @@ import { encoder, decoder } from '../lib/partage.js';
 import { indexerCarrefours, carrefourProche, reperes, abreger } from '../lib/carrefour.js';
 import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
+import { echapper } from '../lib/texte.js';
 import { parcoursSimple } from '../lib/simple.js';
 
 const $ = id => document.getElementById(id);
@@ -590,7 +591,7 @@ function message(e) {
 function texteDuPartage(b, position, coin) {
   const km = (b.m / 1000).toFixed(2).replace('.', ',');
   const rue = (b.rues || [])[0];
-  const par = rue ? `, par ${texteBrut(nommer(rue.nom))}` : '';
+  const par = rue ? `, par ${nommerBrut(rue.nom)}` : '';
   if (!position) return `Ma boucle du jour : ${km} km${par}.`;
   // Le carrefour aussi dans le texte : une messagerie qui n'affiche pas
   // l'image laisserait sinon la phrase sans le seul renseignement utile.
@@ -841,19 +842,41 @@ const FEMININ = new Set(['rue', 'ruelle', 'avenue', 'allée', 'allee', 'impasse'
 const MASCULIN = new Set(['boulevard', 'chemin', 'passage', 'quai', 'cours', 'square',
   'sentier', 'parc', 'pont', 'rond-point', 'mail']);
 
-function nommer(nom) {
-  const mots = nom.split(' ');
+/* Le nom découpé en article, type de voie et reste. Les deux `nommer` en
+   dépendent, et c'est la seule chose qui garantit qu'ils disent la même. */
+function decouper(nom) {
+  const mots = String(nom || '').split(' ');
   const type = mots[0].toLowerCase();
-  const connu = FEMININ.has(type) || MASCULIN.has(type);
-  if (!connu) return `<b>${nom}</b>`;
-
-  const reste = mots.slice(1).join(' ');
+  if (!FEMININ.has(type) && !MASCULIN.has(type)) return { article: '', type: '', reste: nom };
   const article = /^[aeiouyéèêà]/i.test(type) ? 'l’' : (FEMININ.has(type) ? 'la ' : 'le ');
-  return `${article}${type} <b>${reste}</b>`;
+  return { article, type, reste: mots.slice(1).join(' ') };
 }
 
-/* L'attribut aria-label ne rend pas le HTML : il le lirait balise par balise. */
-const texteBrut = html => html.replace(/<[^>]+>/g, '');
+/**
+ * Le nom d'une rue, prêt à poser dans du HTML.
+ *
+ * ⚠️ `reste` vient d'OpenStreetMap, que n'importe qui peut modifier : il
+ * passe par `echapper`. Le `type`, lui, sort d'une liste fermée écrite ici,
+ * et l'article aussi.
+ */
+function nommer(nom) {
+  const { article, type, reste } = decouper(nom);
+  if (!type) return `<b>${echapper(reste)}</b>`;
+  return `${article}${type} <b>${echapper(reste)}</b>`;
+}
+
+/**
+ * Le même nom, en texte pur.
+ *
+ * ⚠️ Pour un aria-label, un texte de partage ou un canvas : ces trois-là ne
+ * rendent PAS le HTML. On reconstruit donc la phrase au lieu de retirer les
+ * balises après coup, ce que faisait l'ancien `texteBrut` : une fois le nom
+ * échappé, une rue « Prince & Duc » y serait devenue « Prince &amp; Duc ».
+ */
+function nommerBrut(nom) {
+  const { article, type, reste } = decouper(nom);
+  return type ? `${article}${type} ${reste}` : reste;
+}
 
 /* La phrase d'accueil ne se montre qu'une fois. */
 const CLE_MODES_VUS = 'runa-modes-vus';
@@ -1010,7 +1033,7 @@ function peindreCartes() {
        type de voie font quatre lignes en 360 px de large. Et c'est ainsi
        qu'on se donne rendez-vous, « au coin de Rachel et Saint-Dominique ». */
     const chaine = b.etapes
-      ? b.etapes.slice(0, -1).map(e => `<b>${abreger(e.nom)}</b>`)
+      ? b.etapes.slice(0, -1).map(e => `<b>${echapper(abreger(e.nom))}</b>`)
           .join(' <span class="fleche" aria-hidden="true">›</span> ')
       : null;
     const par = chaine ? chaine : (rue ? `par ${nommer(rue.nom)}` : '');
@@ -1029,8 +1052,8 @@ function peindreCartes() {
     el.setAttribute('aria-label',
       (b.etapes ? 'Parcours à retenir, ' : '') +
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
-      (b.etapes ? `, par ${b.etapes.slice(0, -1).map(e => texteBrut(nommer(e.nom))).join(', puis ')}`
-                : rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
+      (b.etapes ? `, par ${b.etapes.slice(0, -1).map(e => nommerBrut(e.nom)).join(', puis ')}`
+                : rue ? `, ${nommerBrut(rue.nom)}` : '') +
       (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') +
       `, environ ${minutes} minutes` +
       (b.score ? `, ${b.score}` : ''));
