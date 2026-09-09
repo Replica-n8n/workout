@@ -37,6 +37,9 @@ const R = 6371008.8, RAD = Math.PI / 180;
 const TRACE = '#6ee7a0';        // le parcours, quand rien n'est surligné
 const TRACE_ATTENUE = '#2f6b4c'; // le parcours, pendant la course
 const SUITE = '#facc15';         // les 400 prochains mètres
+
+/* Sur quelle distance on lit la direction du trait pour orienter la flèche. */
+const RECUL_CAP_M = 25;
 const MOI = '#ffffff';
 
 /* L'indigo dit « déjà fait ». Il ne peut pas être vert : le vert est le
@@ -354,6 +357,20 @@ export class Carte {
     this.dessiner();
   }
 
+  /** Le point situé à `metres` en arrière du bout, en mètres du repère. */
+  reculDe(points, metres) {
+    if (!points || points.length < 2) return null;
+    let acc = 0;
+    let apres = this.versM(points[points.length - 1]);
+    for (let i = points.length - 2; i >= 0; i--) {
+      const avant = this.versM(points[i]);
+      acc += Math.hypot(apres.x - avant.x, apres.y - avant.y);
+      if (acc >= metres) return avant;
+      apres = avant;
+    }
+    return this.versM(points[0]);
+  }
+
   /**
    * La position en direct, et les prochains mètres du parcours.
    *
@@ -376,11 +393,13 @@ export class Carte {
         dernier = m;
       });
       this.restant = p;
-      // Le cap de la flèche se prend sur les derniers mètres du segment, pas
-      // sur ses deux derniers points : deux points collés donnent un angle
-      // qui saute d'un rafraîchissement à l'autre.
-      const recul = prochainsPoints[Math.max(0, prochainsPoints.length - 4)];
-      const rm = recul ? this.versM(recul) : avantDernier;
+      /* ⚠️ Le cap se prend sur une DISTANCE, pas sur un nombre de points.
+         En reculant de quatre points, on couvrait de 8 à 208 m selon
+         l'endroit du tracé, parce que les points sont espacés très
+         inégalement. Mesuré sur une boucle de 3,34 km : le cap s'écartait de
+         plus de 20° de la direction réelle du trait une fois sur dix, et
+         jusqu'à 80°. La tête paraissait alors collée de travers. */
+      const rm = this.reculDe(prochainsPoints, RECUL_CAP_M) || avantDernier;
       if (rm && dernier) {
         this.pointe = { x: dernier.x, y: dernier.y,
                         ang: Math.atan2(dernier.y - rm.y, dernier.x - rm.x) };
@@ -626,7 +645,11 @@ export class Carte {
            trait est entièrement recouvert. */
         const { x, y, ang } = this.pointe;
         const dx = Math.cos(ang), dy = Math.sin(ang);
-        const longueur = 15 / e, demiBase = 9.5 / e;
+        /* ⚠️ La tête faisait 15 px de long pour 19 de large : plus large que
+           longue, donc trapue. Une flèche se lit quand elle est plus longue
+           que large. La demi-base reste au-dessus du rayon du bout arrondi
+           du trait, 3,5 px, sinon le trait dépasse et fait une encoche. */
+        const longueur = 19 / e, demiBase = 7 / e;
         ctx.fillStyle = SUITE;
         ctx.beginPath();
         ctx.moveTo(x + dx * longueur, y + dy * longueur);

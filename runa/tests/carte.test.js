@@ -90,3 +90,39 @@ test('un terrain vide ou dégénéré ne laisse pas de chemin fantôme', () => {
   c.poserTerrain([[{ lat: 45.52, lon: -73.58 }]]);
   assert.equal(c.terrain, null, 'deux points ne font pas une surface');
 });
+
+test('le cap de la flèche se prend sur une distance, pas sur 4 points', () => {
+  /* Mesuré sur une vraie boucle : quatre points couvraient de 8 à 208 m selon
+     l'endroit, et le cap qui en sortait s'écartait jusqu'à 80° de la
+     direction du trait. La tête paraissait collée de travers. */
+  const c = fausseCarte();
+  c.poserOrigine({ lat: 45.52, lon: -73.58 });
+
+  /* Un tracé qui monte plein nord sur 100 m, avec quatre points très
+     rapprochés au bout : les quatre derniers ne couvrent que 3 m. */
+  const ky = 6371008.8 * Math.PI / 180;
+  const nord = m => ({ lat: 45.52 + m / ky, lon: -73.58 });
+  const points = [nord(0), nord(50), nord(97), nord(98), nord(99), nord(100)];
+
+  c.suivre({ lat: 45.52, lon: -73.58 }, points);
+  assert.ok(c.pointe, 'la pointe doit exister');
+
+  // Plein nord : y décroît vers le haut, donc l'angle vaut -π/2.
+  assert.ok(Math.abs(c.pointe.ang + Math.PI / 2) < 0.05,
+    `cap ${(c.pointe.ang * 180 / Math.PI).toFixed(0)}° au lieu de -90°`);
+});
+
+test('un coude juste avant le bout ne fait pas pivoter la tête', () => {
+  const c = fausseCarte();
+  c.poserOrigine({ lat: 45.52, lon: -73.58 });
+  const ky = 6371008.8 * Math.PI / 180;
+  const kx = ky * Math.cos(45.52 * Math.PI / 180);
+  const p = (x, y) => ({ lat: 45.52 + y / ky, lon: -73.58 + x / kx });
+
+  /* Cent mètres vers l'est, puis un crochet de 4 m vers le nord au bout. */
+  const points = [p(0, 0), p(60, 0), p(100, 0), p(102, 0), p(104, 0), p(104, 4)];
+  c.suivre({ lat: 45.52, lon: -73.58 }, points);
+  const deg = c.pointe.ang * 180 / Math.PI;
+  // Le crochet final ne pese que 4 m sur les 25 lus : le cap reste vers l'est.
+  assert.ok(Math.abs(deg) < 25, `cap ${deg.toFixed(0)}°, la tête a pivoté`);
+});
