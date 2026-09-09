@@ -377,7 +377,14 @@ function ruesDuParcours(graphe, ids) {
     .map(([nom, m]) => ({ nom, m: Math.round(m) }));
 }
 
-function mesurer(graphe, ids, m, ways, pDepart) {
+/**
+ * Tout ce qu'une carte de proposition affiche, calculé une fois pour toutes.
+ *
+ * Exporté pour que `lib/simple.js` rende EXACTEMENT la même forme d'objet :
+ * deux mesures séparées finiraient par diverger, et c'est la carte qui
+ * mentirait.
+ */
+export function mesurer(graphe, ids, m, ways, pDepart) {
   let feux = 0;
   const vus = new Set();
   for (const id of ids) {

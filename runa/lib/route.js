@@ -73,11 +73,21 @@ class Tas {
  * @param {object} [opts]
  * @param {Set<number>} [opts.waysUtilises]  ways déjà empruntés dans CETTE boucle
  * @param {number} [opts.facteurRetour]      combien on renchérit ces ways
+ * @param {(de:number, vers:number)=>number} [opts.facteur]  surcoût d'une arête,
+ *   TOUJOURS >= 1. C'est ce qui permet à `lib/simple.js` de coller un trajet
+ *   le long d'une rue donnée sans écrire un second routeur.
+ *
+ * ⚠️ Un facteur < 1 casserait l'admissibilité de l'heuristique en silence :
+ * elle mesure des mètres à vol d'oiseau, ce qui n'est une borne inférieure du
+ * coût que tant qu'on ne fait que renchérir. On pénalise, on ne bonifie
+ * jamais. La même règle vaut pour `facteurRetour`.
+ *
  * @returns {{noeuds: number[], m: number, cout: number} | null}
  */
 export function chemin(graphe, depart, arrivee, opts = {}) {
   const { voisins, noeuds } = graphe;
   const utilises = opts.waysUtilises;
+  const facteur = opts.facteur;
   const facteurRetour = opts.facteurRetour ?? 1;
 
   if (depart === arrivee) return { noeuds: [depart], m: 0, cout: 0 };
@@ -109,7 +119,15 @@ export function chemin(graphe, depart, arrivee, opts = {}) {
       if (clos.has(a.vers)) continue;
       // Renchérir un tronçon déjà emprunté dans cette boucle est ce qui
       // empêche le générateur de rendre un aller-retour sur la même rue.
-      const cout = utilises && utilises.has(a.way) ? a.cout * facteurRetour : a.cout;
+      let cout = utilises && utilises.has(a.way) ? a.cout * facteurRetour : a.cout;
+      if (facteur) {
+        const f = facteur(id, a.vers);
+        // `Infinity` ferme l'arête. C'est ce qui permet à un appelant de
+        // borner la recherche à un couloir au lieu de fouiller tout le
+        // quartier, sans qu'on ait à lui ouvrir une seconde option.
+        if (!(f < Infinity)) continue;
+        cout *= f;
+      }
       const nouveau = gi + cout;
       if (nouveau < (g.get(a.vers) ?? Infinity)) {
         g.set(a.vers, nouveau);

@@ -506,6 +506,22 @@ button.secondaire {
   margin-top: 2px;
 }
 
+/* Le parcours à retenir. Il arrive après les trois autres, quelques secondes
+   plus tard : sans une marque qui le distingue, une carte qui apparaît toute
+   seule ressemble à un défaut d'affichage. */
+.boucle .marque {
+  display: block;
+  margin-top: 2px;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--vert);
+}
+/* Les chevrons entre les rues sont de la ponctuation, pas du texte : ils ne
+   doivent pas peser autant que les noms qu'ils séparent. */
+.boucle .fleche { color: var(--trait2, #4a535e); font-weight: 700; }
+
 /* -------------------------------------------------------- mon quartier */
 
 #monquartier { display: flex; flex-direction: column; gap: 10px; }

@@ -16,9 +16,10 @@ import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
 import * as plateau from './plateau.js';
 import { encoder, decoder } from '../lib/partage.js';
-import { indexerCarrefours, carrefourProche, reperes } from '../lib/carrefour.js';
+import { indexerCarrefours, carrefourProche, reperes, abreger } from '../lib/carrefour.js';
 import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
+import { parcoursSimple } from '../lib/simple.js';
 
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
@@ -433,6 +434,72 @@ function retenir(candidates, cible) {
   });
 }
 
+/* ------------------------------------------------- le parcours à retenir */
+
+/**
+ * Cherche le parcours en quelques rues et l'ajoute à la liste s'il existe.
+ *
+ * ⚠️ APRÈS l'affichage des trois autres, et jamais pendant. Le calcul prend
+ * jusqu'à trois secondes ici, donc dix sur un téléphone : le faire avant
+ * laisserait l'écran vide tout ce temps, alors que les boucles ordinaires
+ * sont déjà prêtes. Il arrive quand il arrive, et la liste s'allonge.
+ *
+ * Rendre `null` est un résultat, pas une panne : tous les quartiers n'ont pas
+ * de longues rues droites qui se croisent, et on préfère se taire plutôt que
+ * de proposer un mauvais parcours. Rien n'est donc annoncé à l'avance.
+ */
+/* Le parcours à retenir ne dépend NI du mode NI de la graine : il n'y en a
+   qu'un par quartier et par distance. Or toucher un onglet relance une
+   recherche complète, et sans cette mémoire on repayait trois secondes de
+   calcul à chaque aller-retour entre découverte et conquête. */
+let dernierSimple = null;
+
+function ajouterLeSimple(cible) {
+  const graine = etat.graine;
+  const graphe = etat.graphe;
+  const cle = `${etat.depart.lat.toFixed(4)},${etat.depart.lon.toFixed(4)},${Math.round(cible)}`;
+
+  if (dernierSimple && dernierSimple.cle === cle && dernierSimple.graphe === graphe) {
+    if (dernierSimple.b && !etat.enCourse && !$('resultats').hidden) {
+      etat.boucles.push(dernierSimple.b);
+      peindreCartes();
+      const n = etat.boucles.length;
+      $('resume').textContent =
+        `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+    }
+    return;
+  }
+  /* Un temps mort avant de calculer : sans lui, le rendu des trois premières
+     cartes serait retardé par ce calcul, et l'écran resterait blanc. */
+  setTimeout(() => {
+    let b = null;
+    try {
+      b = parcoursSimple(graphe, { depart: etat.depart, distanceCible: cible });
+    } catch (e) {
+      b = null;   // une proposition en plus ne doit jamais casser l'écran
+    }
+    /* Retenu même quand il n'y a rien : « ce quartier n'en porte pas » est un
+       résultat, et le recalculer à chaque onglet coûterait aussi cher. */
+    dernierSimple = { cle, graphe, b };
+    /* L'utilisatrice a pu relancer une recherche, changer de mode ou partir
+       courir pendant le calcul. Dans ce cas le résultat ne concerne plus ce
+       qui est à l'écran. */
+    if (!b || graine !== etat.graine || graphe !== etat.graphe) return;
+    if (etat.enCourse || $('resultats').hidden) return;
+    if (etat.boucles.some(x => x.etapes)) return;
+
+    /* Pas de `score` : la suite des rues est déjà écrite sur la carte, et
+       « 4 rues à retenir » juste en dessous ne fait que répéter ce qu'on
+       vient de lire. */
+    etat.boucles.push(b);
+    peindreCartes();
+    /* Le résumé disait « 3 boucles » alors qu'il y en a quatre à l'écran. */
+    const n = etat.boucles.length;
+    $('resume').textContent =
+      `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+  }, 0);
+}
+
 /* --------------------------------------------------------------- action */
 
 let enCours = false;
@@ -479,6 +546,7 @@ async function chercher(nouvelleGraine) {
     etat.enCourse = false;
     montrerResultats(cible);
     dire(null);
+    ajouterLeSimple(cible);
   } catch (e) {
     direUneErreur(message(e));
   } finally {
@@ -932,7 +1000,20 @@ function peindreCartes() {
     // La première rue que les autres boucles n'ont pas déjà prise.
     const rue = (b.rues || []).find(r => !prises.has(r.nom)) || (b.rues || [])[0] || null;
     if (rue) prises.add(rue.nom);
-    const par = rue ? `par ${nommer(rue.nom)}` : '';
+
+    /* Le parcours à retenir ne se décrit pas par une rue principale mais par
+       sa suite de rues : c'est tout ce qui le distingue, et c'est ce qu'on se
+       récite avant de partir. La dernière étape est répétée du départ, on ne
+       la réécrit donc pas.
+
+       Abrégé, pas « nommé » : quatre noms complets avec leur article et leur
+       type de voie font quatre lignes en 360 px de large. Et c'est ainsi
+       qu'on se donne rendez-vous, « au coin de Rachel et Saint-Dominique ». */
+    const chaine = b.etapes
+      ? b.etapes.slice(0, -1).map(e => `<b>${abreger(e.nom)}</b>`)
+          .join(' <span class="fleche" aria-hidden="true">›</span> ')
+      : null;
+    const par = chaine ? chaine : (rue ? `par ${nommer(rue.nom)}` : '');
 
     /* Le critère qui manquait pour trancher entre trois boucles de même
        longueur. Il n'apparaît que s'il a été calculé : une boucle restaurée
@@ -940,13 +1021,16 @@ function peindreCartes() {
        « 0 % » serait pire que se taire. */
     const score = b.score == null ? '' : `<span class="score">${b.score}</span>`;
 
+    const marque = b.etapes ? '<span class="marque">À retenir</span>' : '';
     el.innerHTML =
-      `<span class="km">${(b.m / 1000).toFixed(2)} km</span>` +
+      `<span class="km">${(b.m / 1000).toFixed(2)} km${marque}</span>` +
       `<span class="detail">${par}<br>${feux}${feux ? ' · ' : ''}${minutes} min${eclaire}${score}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
+      (b.etapes ? 'Parcours à retenir, ' : '') +
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
-      (rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
+      (b.etapes ? `, par ${b.etapes.slice(0, -1).map(e => texteBrut(nommer(e.nom))).join(', puis ')}`
+                : rue ? `, ${texteBrut(nommer(rue.nom))}` : '') +
       (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') +
       `, environ ${minutes} minutes` +
       (b.score ? `, ${b.score}` : ''));
