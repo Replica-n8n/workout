@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.13.1';
+const VERSION = '1.13.2';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [
@@ -46,6 +46,7 @@ const FILES = [
   './lib/simple.js',
   './lib/parc.js',
   './lib/chevrons.js',
+  './lib/proposition.js',
   './lib/overpass.js',
   './lib/suivi.js',
   './manifest.webmanifest',

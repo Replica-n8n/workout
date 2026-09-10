@@ -22,6 +22,7 @@ import { classer, Territoire } from '../lib/score.js';
 import { echapper } from '../lib/texte.js';
 import { parcoursSimple } from '../lib/simple.js';
 import { contoursDesParcs, parcoursAuParc } from '../lib/parc.js';
+import { choisirProposition } from '../lib/proposition.js';
 import { feraNuit, minutesDeJour } from '../lib/soleil.js';
 import { meteo, phrase as phraseMeteo } from '../lib/meteo.js';
 
@@ -49,6 +50,9 @@ const etat = {
   carrefours: [],       // les croisements nommés, pour dire où l'on est
   reperes: null,        // parcs, stations, tables, pour l'image partagée
   parcs: [],            // les parcs AVEC leur contour, pour en faire le tour
+  extras: {},           // les propositions en plus arrivées : { simple, parc }
+  extraMontre: null,    // le genre de celle affichée
+  extraContre: null,    // celui qu'« Autres parcours » doit éviter
   boucles: [],
   choisie: 0,
   enCourse: false,
@@ -558,10 +562,37 @@ function retenir(candidates, cible) {
    calcul à chaque aller-retour entre découverte et conquête. */
 const dernieres = new Map();   // genre -> { cle, graphe, b, vus }
 
-/* L'ordre des cartes en bas de liste, quel que soit l'ordre d'arrivée : sans
-   lui, un parc tiré de la mémoire passait avant un parcours à retenir encore
-   en calcul, et les cartes changeaient de place d'une recherche à l'autre. */
-const RANG = { simple: 1, parc: 2 };
+
+/**
+ * UNE seule proposition en plus des trois boucles, jamais deux.
+ *
+ * ⚠️ Avec le parcours à retenir ET le tour du parc, la liste comptait cinq
+ * cartes, dont les deux plus hautes, et la carte tombait de 332 à 249 px sur
+ * son écran : « ça écrase la map et on voit moins bien les tracés ». Quand
+ * les deux existent, on garde celle qui a le moins de feux, et « Autres
+ * parcours » fait passer à l'autre.
+ */
+function afficherLaProposition(cible) {
+  const dispo = Object.values(etat.extras).filter(Boolean);
+  if (!dispo.length) return;
+  const montree = etat.boucles.find(x => x.genre);
+  /* Si elle a déjà touché la proposition affichée, on ne la lui retire pas
+     sous le doigt parce qu'une autre vient d'arriver. */
+  if (montree && etat.boucles[etat.choisie] === montree) return;
+
+  const choix = choisirProposition(dispo, etat.extraContre);
+  if (!choix || montree === choix) return;
+
+  const choisie = etat.boucles[etat.choisie];
+  etat.boucles = etat.boucles.filter(x => !x.genre).concat([choix]);
+  etat.choisie = Math.max(0, etat.boucles.indexOf(choisie));
+  etat.extraMontre = choix.genre;
+  peindreCartes();
+  /* Le résumé disait « 3 boucles » alors qu'il y en avait quatre. */
+  const n = etat.boucles.length;
+  $('resume').textContent =
+    `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+}
 
 function ajouterUneProposition(genre, calcul, cible, renouveler = false) {
   const graine = etat.graine;
@@ -572,16 +603,8 @@ function ajouterUneProposition(genre, calcul, cible, renouveler = false) {
     /* Elle a pu relancer une recherche ou partir courir pendant le calcul :
        le résultat ne concerne plus ce qui est à l'écran. */
     if (!b || etat.enCourse || $('resultats').hidden) return;
-    if (etat.boucles.some(x => x.genre === genre)) return;
-    const choisie = etat.boucles[etat.choisie];
-    etat.boucles.push(b);
-    etat.boucles.sort((x, y) => (RANG[x.genre] || 0) - (RANG[y.genre] || 0));
-    etat.choisie = Math.max(0, etat.boucles.indexOf(choisie));
-    peindreCartes();
-    /* Le résumé disait « 3 boucles » alors qu'il y en avait quatre. */
-    const n = etat.boucles.length;
-    $('resume').textContent =
-      `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+    etat.extras[genre] = b;
+    afficherLaProposition(cible);
   };
 
   const connu = dernieres.get(genre);
@@ -669,6 +692,10 @@ async function chercher(nouvelleGraine) {
     montrerResultats(cible);
     dire(null);
     const graphe = etat.graphe, depart = etat.depart, parcs = etat.parcs;
+    /* Une nouvelle recherche repart sans proposition. « Autres parcours »
+       montre celle qu'on n'a PAS vue la dernière fois, s'il y en a deux. */
+    etat.extraContre = nouvelleGraine ? etat.extraMontre : null;
+    etat.extras = {};
     ajouterUneProposition('simple',
       exclure => parcoursSimple(graphe, { depart, distanceCible: cible, exclure }),
       cible, nouvelleGraine);
