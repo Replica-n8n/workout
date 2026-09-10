@@ -125,3 +125,23 @@ test('l’hémisphère sud et les longitudes négatives passent', () => {
   assert.ok(lu);
   assert.ok(metres(points[0], lu.points[0]) < 2);
 });
+
+test('la position partagée en course est la vraie, pas le départ', async () => {
+  /* ⚠️ `watchPosition` rend un GeolocationPosition : la latitude est dans
+     `p.coords`, pas dans `p.lat`. En lisant `p.lat`, la position gardée pour
+     le partage valait `undefined`, l'encodeur écrivait 0, et le lien plaçait
+     le coureur AU DÉPART, sous la phrase « Voici où j'en suis ». Depuis la
+     1.6.0. `js/app.js` ne s'importe pas sous Node : on lit le source. */
+  const fs = await import('node:fs');
+  const app = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+  const corps = app.slice(app.indexOf('function surPosition('), app.indexOf('function surPosition(') + 600);
+  const garde = corps.match(/derniereVue\s*=\s*([^;]+);/);
+  assert.ok(garde, 'surPosition ne garde plus la dernière position');
+  assert.ok(!/\bp\.(lat|lon)\b/.test(garde[1]), `lu hors de p.coords : ${garde[1]}`);
+
+  /* Et ce que l'encodeur fait d'une position sans coordonnées : le départ.
+     C'est pour ça que le défaut ne se voyait pas, le lien restait valide. */
+  const b = boucle();
+  const recu = decoder(encoder(b, { lat: undefined, lon: undefined, quand: Date.now() }));
+  assert.ok(Math.abs(recu.position.lat - b.points[0].lat) < 1e-5, 'le repli silencieux a changé');
+});

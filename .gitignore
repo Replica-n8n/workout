@@ -10,3 +10,6 @@ runa/maquettes/
 
 # La carte graphify du code : generee, locale, et surtout pas publiee par Pages.
 runa/graphify-out/
+
+# Les critiques de design (skill impeccable) : archives locales, pas des pages du site.
+.impeccable/

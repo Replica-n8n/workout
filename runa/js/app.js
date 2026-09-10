@@ -1147,10 +1147,12 @@ function arreterSuivi() {
 }
 
 function surPosition(p) {
-  derniereVue = { lat: p.lat, lon: p.lon, quand: Date.now() };
+  const moi = { lat: p.coords.latitude, lon: p.coords.longitude };
+  /* ⚠️ Dans `p.coords`, pas `p.lat` : lu au mauvais endroit, le partage
+     plaçait le coureur au départ sous « Voici où j'en suis ». */
+  derniereVue = { ...moi, quand: Date.now() };
   const b = etat.boucles[etat.choisie];
   if (!b) return;
-  const moi = { lat: p.coords.latitude, lon: p.coords.longitude };
 
   // Le cumul sert uniquement à savoir si la course a commencé, pas à mesurer
   // une distance : le bruit GPS le gonflerait, ce qui est sans importance ici
@@ -1342,7 +1344,11 @@ $('quitter').addEventListener('click', () => {
 
 /* Une pression brève sur la carte déplace le départ. Le déplacement et le
    pincement restent gérés par la carte : on ne réagit qu'à un appui qui
-   n'a ni duré ni bougé. */
+   n'a ni duré ni bougé.
+
+   ⚠️ Pas sur l'écran des résultats, qui porte aussi la course. Le geste
+   n'y est annoncé nulle part, et il effaçait tout : la carte occupe 79 % de
+   l'écran en course, la toucher pour regarder est un réflexe. */
 (() => {
   const c = $('carte');
   let t0 = 0, x0 = 0, y0 = 0, doigts = 0;
@@ -1352,6 +1358,7 @@ $('quitter').addEventListener('click', () => {
     const seul = doigts === 1;
     doigts = Math.max(0, doigts - 1);
     if (!seul || !carte.origine) return;
+    if (!$('resultats').hidden) return;
     if (Date.now() - t0 > 400) return;
     if (Math.hypot(e.clientX - x0, e.clientY - y0) > 12) return;
 

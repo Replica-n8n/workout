@@ -176,7 +176,10 @@ body {
   min-height: 44px; padding: 0 16px;
   border: 0; border-radius: 9px;
   background: #0d0f12; color: var(--vert);
-  font: 600 .95rem/1 inherit;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: .95rem;
+  line-height: 1;
 }
 #installe .non {
   width: 44px; height: 44px;
@@ -221,7 +224,10 @@ body {
   background: var(--case);
   color: var(--texte);
   border-radius: 10px;
-  font: 600 .95rem/1 inherit;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: .95rem;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .chip[aria-pressed="true"] {
@@ -313,7 +319,13 @@ button.principal {
   border-radius: 12px;
   background: var(--vert);
   color: #0d0f12;
-  font: 700 1rem/1 inherit;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  /* 1.2 et pas 1 : « Reprendre le parcours commencé il y a 45 min » passe
+     sur deux lignes en 360 px, qui se touchaient à 1. */
+  line-height: 1.2;
+  padding: 6px 14px;
   width: 100%;
 }
 button.principal:disabled { opacity: .4; }
@@ -324,7 +336,10 @@ button.secondaire {
   border-radius: 11px;
   background: var(--case);
   color: var(--texte);
-  font: 500 .95rem/1 inherit;
+  font-family: inherit;
+  font-weight: 500;
+  font-size: .95rem;
+  line-height: 1;
   padding: 0 14px;
 }
 
@@ -413,7 +428,10 @@ button.secondaire {
   min-height: 48px;
   border: 0; border-radius: 11px;
   background: var(--vert); color: #0d0f12;
-  font: 700 .95rem/1 inherit;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: .95rem;
+  line-height: 1;
 }
 
 /* ------------------------------------------------------- parcours gardés */
@@ -580,5 +598,6 @@ button.secondaire {
 
 /* Reprendre une course interrompue : proposé sur l'écran d'accueil, jamais
    imposé à sa place. */
-.reprendre { background: var(--jaune); color: #2a1e06; }
+/* Aussi précis que `button.principal`, sinon il perd et sort du même vert. */
+button.principal.reprendre { background: var(--jaune); color: #2a1e06; }
 .reprendre[hidden] { display: none; }

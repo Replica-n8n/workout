@@ -60,3 +60,16 @@ test('montrerEcran ferme tous les autres', () => {
   assert.match(corps, /hidden\s*=\s*id\s*!==\s*nom/,
     'montrerEcran doit fermer tout ce qui n’est pas l’écran demandé');
 });
+
+test('toucher la carte ne déplace le départ que là où c’est annoncé', () => {
+  /* La pression brève sur la carte déplace le départ, efface les boucles et
+     renvoie aux réglages. C'est annoncé sur l'écran de réglages (« Touchez la
+     carte pour déplacer le départ »), et nulle part ailleurs. En course, la
+     carte occupe 79 % de l'écran : la toucher pour regarder effaçait la
+     course en cours, sans rien pour revenir. */
+  const debut = app.indexOf("addEventListener('pointerup'");
+  assert.ok(debut > 0, 'le gestionnaire du toucher de carte a disparu');
+  const avant = app.slice(debut, app.indexOf('etat.depart =', debut));
+  assert.match(avant, /\$\('resultats'\)\.hidden/,
+    'le toucher de carte doit être ignoré quand l’écran des résultats (et donc la course) est affiché');
+});

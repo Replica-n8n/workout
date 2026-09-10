@@ -71,3 +71,23 @@ test('la carte ne peut pas pousser le panneau hors de la page', () => {
      le double de sa taille à l'écran sur un écran dense. */
   assert.match(valeur('#carte', 'flex'), /^1 1 0px$/);
 });
+
+test('aucun raccourci `font` ne mêle `inherit` à d’autres valeurs', () => {
+  /* `font: 700 1rem/1 inherit` n'est pas du CSS : `inherit` ne vaut que
+     seul, jamais comme famille dans le raccourci. Le navigateur jette alors
+     la déclaration ENTIÈRE, sans rien dire. Depuis la première version, tous
+     les boutons s'affichaient en Arial 13 px maigre, le bouton principal
+     compris, le texte le plus faible de l'écran en plein soleil. */
+  const fautifs = [...css.matchAll(/(?:^|[;{\s])font\s*:\s*([^;}]+)/g)]
+    .map(m => m[1].trim())
+    .filter(v => /\binherit\b/.test(v) && v !== 'inherit');
+  assert.deepEqual(fautifs, [], 'raccourcis invalides : ' + fautifs.join(' | '));
+});
+
+test('« Reprendre » garde sa couleur à côté du bouton principal', () => {
+  /* `.reprendre` perdait contre `button.principal`, plus précis : les deux
+     boutons de l'accueil sortaient du même vert, jumeaux, alors que l'un
+     reprend une course et l'autre en cherche une nouvelle. */
+  assert.match(css, /button\.principal\.reprendre\s*\{[^}]*background:\s*var\(--jaune\)/,
+    'la règle de Reprendre doit être au moins aussi précise que button.principal');
+});
