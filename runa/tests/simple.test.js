@@ -190,3 +190,14 @@ test('rien à proposer là où il n’y a pas de rues qui se croisent', () => {
   const b = parcoursSimple(g, { depart: { lat: 48.86, lon: 2.35 }, distanceCible: 3000 });
   assert.equal(b, null, 'un circuit inventé là où aucune rue n’en croise une autre');
 });
+
+test('« Autres parcours » donne un AUTRE circuit, pas le même', () => {
+  /* Vu par elle : « je vois encore le même 4e parcours ». Exclure les
+     circuits déjà montrés doit en rendre un autre, tant qu'il en reste. */
+  const { d, g } = quartier();
+  const a = parcoursSimple(g, { depart: d.centre, distanceCible: 3000 });
+  assert.ok(a && a.signature, 'pas de signature sur le premier circuit');
+  const b = parcoursSimple(g, { depart: d.centre, distanceCible: 3000, exclure: new Set([a.signature]) });
+  assert.ok(b, 'plus rien après en avoir exclu un seul, sur un damier');
+  assert.notEqual(b.signature, a.signature, 'le même circuit est revenu');
+});

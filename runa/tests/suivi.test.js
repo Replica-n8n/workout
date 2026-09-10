@@ -129,3 +129,69 @@ test('metresRestants décompte jusqu’au départ', () => {
   // Et au départ, tout est encore à faire ou rien, selon le sens.
   assert.ok(metresRestants(pts, 1, -1) < 200);
 });
+
+/* Un accès fait à l'aller puis au retour, sur les mêmes points : c'est la
+   forme de la sortie au parc et du parcours à retenir avec amorce. */
+/* ⚠️ Assez LONG pour que la fenêtre de recherche (80 points de part et
+   d'autre) ne couvre pas tout le tracé : sur un tracé court elle en fait deux
+   fois le tour, tombe sur l'aller par le hasard de l'ordre de parcours, et le
+   test passe alors que le défaut est là. Le vrai tracé du parc Jarry fait 741
+   points. */
+function allerRetour(n = 40, pointsDuTour = 300) {
+  const aller = [];
+  for (let i = 0; i < n; i++) aller.push({ lat: 45.54 + i * 0.0002, lon: -73.62 });
+  const bout = aller[n - 1];
+  const tour = [];
+  for (let i = 1; i < pointsDuTour; i++) {
+    const a = 2 * Math.PI * i / pointsDuTour;
+    tour.push({ lat: bout.lat + 0.004 * (1 - Math.cos(a)), lon: bout.lon + 0.006 * Math.sin(a) });
+  }
+  return aller.concat(tour, [bout], aller.slice(0, -1).reverse());
+}
+
+test('en quittant son départ, on reste sur l’ALLER, pas sur le retour', () => {
+  /* ⚠️ Trouvé par la revue du 2026-09-10, sur le vrai tracé du parc Jarry :
+     la fenêtre de recherche fait le tour du tracé, et à distance ÉGALE elle
+     gardait le premier indice parcouru, qui était celui de la FIN. À 50 m de
+     chez elle, l'app croyait qu'elle rentrait et disait qu'il ne restait
+     presque rien. */
+  const pts = allerRetour();
+  const n = pts.length;
+  let prec = accrocher(pts, pts[0]).indice;
+  for (const i of [2, 3, 6, 10, 15, 20, 30]) {
+    const a = accrocher(pts, pts[i], prec);
+    assert.ok(a.indice < n / 2, `position ${i} accrochée à ${a.indice}, sur le retour`);
+    prec = a.indice;
+  }
+});
+
+test('au retour, on reste sur le retour', () => {
+  /* L'inverse doit tenir aussi : une fois le demi-tour fait, les mêmes
+     points ne doivent pas renvoyer sur l'aller. */
+  const pts = allerRetour();
+  const n = pts.length;
+  let prec = n - 30;
+  for (const k of [29, 25, 20, 12, 5]) {
+    const i = n - k;
+    const a = accrocher(pts, pts[i], prec);
+    assert.ok(a.indice > n / 2, `retour ${i} accroché à ${a.indice}, sur l’aller`);
+    prec = a.indice;
+  }
+});
+
+test('sur une boucle courte répétée, on reste dans le tour en cours', () => {
+  /* Trois tours d'une boucle de 30 points : le même endroit revient tous les
+     30 indices, donc à l'intérieur de la fenêtre de recherche. */
+  const tour = [];
+  for (let i = 0; i < 30; i++) {
+    const a = 2 * Math.PI * i / 30;
+    tour.push({ lat: 45.54 + 0.002 * Math.sin(a), lon: -73.62 + 0.003 * Math.cos(a) });
+  }
+  const pts = tour.concat(tour, tour);
+  let prec = 31;   // deuxième tour
+  for (const i of [33, 36, 40, 45]) {
+    const a = accrocher(pts, pts[i], prec);
+    assert.ok(a.indice >= 30 && a.indice < 60, `position ${i} accrochée à ${a.indice}, hors du tour en cours`);
+    prec = a.indice;
+  }
+});

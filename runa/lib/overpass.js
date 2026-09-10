@@ -39,7 +39,15 @@ export function requete(b, timeout = 90) {
   /* Les points d'intérêt viennent avec, dans la même requête : mesuré,
      170 Ko contre 2 Mo pour les rues, et ce sont eux qui rendent une carte
      partagée lisible. `out tags center` donne le nom et un point, sans les
-     noeuds du contour dont on n'a que faire. */
+     noeuds du contour dont on n'a que faire.
+
+     Les PARCS reviennent une seconde fois, avec leur contour cette fois
+     (`out tags geom`), pour que `lib/parc.js` puisse en faire le tour. Mesuré
+     sur Villeray : 56 Ko pour les 44 parcs nommés, contre plus de 800 Ko pour
+     les rues. Les arbres, eux, auraient doublé le téléchargement : c'est par
+     les parcs que l'app trouve de l'ombre, pas par les arbres. Le doublon est
+     sans effet sur la carte : `reperes` ignore ce qui n'a pas de centre, et
+     seule la seconde sortie en est dépourvue. */
   return `[out:json][timeout:${timeout}];
 way["highway"]["highway"!~"^(${EXCLUS})$"]["area"!="yes"](${boite})->.w;
 .w out body;
@@ -53,7 +61,9 @@ out body qt;
   node["railway"="station"]["name"](${boite});
   node["public_transport"="station"]["name"](${boite});
 );
-out tags center qt;`;
+out tags center qt;
+way["leisure"="park"]["name"](${boite});
+out tags geom qt;`;
 }
 
 /**

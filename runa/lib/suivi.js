@@ -39,22 +39,49 @@ export function accrocher(points, moi, indicePrecedent = null, fenetre = 80) {
   const n = points.length;
   if (!n || !moi) return null;
 
-  const cherche = (debut, fin) => {
-    let meilleur = -1, meilleurD = Infinity;
+  /* ⚠️ Deux points du tracé peuvent être au MÊME endroit : l'accès d'une
+     sortie au parc se fait à l'aller puis au retour, et une boucle courte
+     répétée repasse par ses propres points à chaque tour. À distance égale,
+     l'ancienne version gardait le premier indice parcouru. Or la fenêtre fait
+     le tour du tracé, et le premier parcouru était celui de la FIN : en
+     quittant la station Jarry, la position 3 s'accrochait au point 737 sur
+     741, donc au retour, et l'app annonçait qu'il ne restait presque rien.
+
+     À égalité, ou presque, c'est le point le plus proche de la position
+     précédente DANS LE TRACÉ qui gagne : on court en continu, on ne saute pas
+     d'un tour au suivant ni de l'aller au retour entre deux relevés. `k` n'est
+     pas replié, donc `|k - ref|` est le vrai écart d'indices dans la fenêtre,
+     y compris au passage du point de départ. */
+  const cherche = (debut, fin, ref) => {
+    let dMin = Infinity;
+    const vus = [];
     for (let k = debut; k <= fin; k++) {
       const i = ((k % n) + n) % n;
       const d = metres(moi, points[i]);
-      if (d < meilleurD) { meilleurD = d; meilleur = i; }
+      vus.push([k, i, d]);
+      if (d < dMin) dMin = d;
     }
-    return { indice: meilleur, ecartM: meilleurD };
+    let meilleur = -1, ecartIndice = Infinity;
+    for (const [k, i, d] of vus) {
+      if (d > dMin + EGALITE_M) continue;
+      /* Sans position précédente, on garde le premier : c'est l'aller. */
+      const e = ref == null ? k - debut : Math.abs(k - ref);
+      if (e < ecartIndice) { ecartIndice = e; meilleur = i; }
+    }
+    return { indice: meilleur, ecartM: metres(moi, points[meilleur]) };
   };
 
   if (indicePrecedent !== null && indicePrecedent >= 0) {
-    const proche = cherche(indicePrecedent - fenetre, indicePrecedent + fenetre);
+    const proche = cherche(indicePrecedent - fenetre, indicePrecedent + fenetre, indicePrecedent);
     if (proche.ecartM <= ECART_MAX_M) return { ...proche, global: false };
   }
-  return { ...cherche(0, n - 1), global: true };
+  return { ...cherche(0, n - 1, null), global: true };
 }
+
+/* Deux points plus proches que ça l'un de l'autre sont indiscernables pour
+   le GPS d'un téléphone : on ne départage plus sur la distance, mais sur la
+   continuité du parcours. */
+const EGALITE_M = 8;
 
 /**
  * Dans quel sens on parcourt la boucle, à partir des derniers accrochages.

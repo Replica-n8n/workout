@@ -15,6 +15,7 @@
    ========================================================================= */
 
 import { Place, candidatsDeRues, poserDesCandidats } from '../lib/etiquettes.js';
+import { placerChevrons, pasPour } from '../lib/chevrons.js';
 
 const R = 6371008.8, RAD = Math.PI / 180;
 
@@ -38,8 +39,11 @@ const TRACE = '#6ee7a0';        // le parcours, quand rien n'est surligné
 const TRACE_ATTENUE = '#2f6b4c'; // le parcours, pendant la course
 const SUITE = '#facc15';         // les 400 prochains mètres
 
-/* Sur quelle distance on lit la direction du trait pour orienter la flèche. */
-const RECUL_CAP_M = 25;
+/* Les chevrons qui disent le sens, en vert, cernés de noir pour se lire sur
+   le vert vif du tracé comme sur le vert sombre qu'il prend pendant la
+   course. */
+const CHEVRON = TRACE;
+const CHEVRON_HALO = '#0d0f12';
 const MOI = '#ffffff';
 
 /* L'indigo dit « déjà fait ». Il ne peut pas être vert : le vert est le
@@ -343,16 +347,17 @@ export class Carte {
        GPS, soit quelques secondes, en montrant un sens qui n'était plus le
        bon. */
     this.restant = null;
-    this.pointe = null;
     this.moi = null;
+    this.pointsM = null;
+    this.chevrons = null;
+    this.suiviIndice = null;
+    this.suiviSens = 1;
     if (!this.origine) return;
 
     if (boucle && boucle.points.length) {
       const p = new Path2D();
-      boucle.points.forEach((pt, i) => {
-        const m = this.versM(pt);
-        i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y);
-      });
+      this.pointsM = boucle.points.map(pt => this.versM(pt));
+      this.pointsM.forEach((m, i) => { i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y); });
       this.trace = p;
 
       /* Le nombre de tours, posé au milieu de la boucle.
@@ -363,27 +368,21 @@ export class Carte {
          plus grosse à l'écran. */
       if (boucle.tours > 1) {
         this.tours = boucle.tours;
-        let sx = 0, sy = 0;
-        for (const pt of boucle.points) { const m = this.versM(pt); sx += m.x; sy += m.y; }
-        this.milieuTrace = { x: sx / boucle.points.length, y: sy / boucle.points.length };
+        /* ⚠️ Le centre du TOUR quand on le connaît, pas celui du tracé
+           entier. Le tracé comprend l'accès, fait deux fois : au parc Jarry
+           depuis la station, 843 m d'accès contre 2,6 km de tour tiraient le
+           chiffre vers la station, jusqu'à le poser hors de la boucle. */
+        if (boucle.centreTour) {
+          this.milieuTrace = this.versM(boucle.centreTour);
+        } else {
+          let sx = 0, sy = 0;
+          for (const pt of boucle.points) { const m = this.versM(pt); sx += m.x; sy += m.y; }
+          this.milieuTrace = { x: sx / boucle.points.length, y: sy / boucle.points.length };
+        }
       }
     }
     this.depart = depart ? this.versM(depart) : null;
     this.dessiner();
-  }
-
-  /** Le point situé à `metres` en arrière du bout, en mètres du repère. */
-  reculDe(points, metres) {
-    if (!points || points.length < 2) return null;
-    let acc = 0;
-    let apres = this.versM(points[points.length - 1]);
-    for (let i = points.length - 2; i >= 0; i--) {
-      const avant = this.versM(points[i]);
-      acc += Math.hypot(apres.x - avant.x, apres.y - avant.y);
-      if (acc >= metres) return avant;
-      apres = avant;
-    }
-    return this.versM(points[0]);
   }
 
   /**
@@ -391,34 +390,33 @@ export class Carte {
    *
    * C'est ce qui répond à « je tourne à gauche ou à droite ? » : voir où l'on
    * est ne suffit pas sur une boucle, il faut voir de quel côté elle
-   * continue. Le segment surligné le dit sans qu'on ait à réfléchir.
+   * continue. Le segment surligné le dit sans qu'on ait à réfléchir, et les
+   * chevrons disent dans quel sens.
+   *
+   * @param {object} [o]
+   * @param {number} [o.indice]  où l'on est sur le tracé
+   * @param {number} [o.sens]    1 dans l'ordre du tracé, -1 à rebours : on
+   *   peut courir une boucle dans l'autre sens, et les chevrons doivent alors
+   *   se retourner avec elle
    */
-  suivre(moi, prochainsPoints) {
+  suivre(moi, prochainsPoints, o = {}) {
     this.poserOrigine(moi);
     this.moi = moi && this.origine ? this.versM(moi) : null;
     this.restant = null;
-    this.pointe = null;
     if (prochainsPoints && prochainsPoints.length > 1 && this.origine) {
       const p = new Path2D();
-      let avantDernier = null, dernier = null;
       prochainsPoints.forEach((pt, i) => {
         const m = this.versM(pt);
         i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y);
-        avantDernier = dernier;
-        dernier = m;
       });
       this.restant = p;
-      /* ⚠️ Le cap se prend sur une DISTANCE, pas sur un nombre de points.
-         En reculant de quatre points, on couvrait de 8 à 208 m selon
-         l'endroit du tracé, parce que les points sont espacés très
-         inégalement. Mesuré sur une boucle de 3,34 km : le cap s'écartait de
-         plus de 20° de la direction réelle du trait une fois sur dix, et
-         jusqu'à 80°. La tête paraissait alors collée de travers. */
-      const rm = this.reculDe(prochainsPoints, RECUL_CAP_M) || avantDernier;
-      if (rm && dernier) {
-        this.pointe = { x: dernier.x, y: dernier.y,
-                        ang: Math.atan2(dernier.y - rm.y, dernier.x - rm.x) };
-      }
+    }
+    const indice = Number.isInteger(o.indice) ? o.indice : null;
+    const sens = o.sens === -1 ? -1 : 1;
+    if (indice !== this.suiviIndice || sens !== this.suiviSens) {
+      this.suiviIndice = indice;
+      this.suiviSens = sens;
+      this.chevrons = null;   // à reposer : ce qui est devant a changé
     }
     this.dessiner();
   }
@@ -644,45 +642,45 @@ export class Carte {
       ctx.lineWidth = 7 / e;
       ctx.stroke(this.restant);
 
-      /* La flèche au bout du surlignage. Ce n'est pas un ornement : une
-         information portée par la seule couleur ne tient ni pour un
-         daltonien, ni à bout de bras, ni essoufflée. Elle dit le SENS, ce
-         que la couleur ne peut pas dire. */
-      if (this.pointe) {
-        /* ⚠️ Première version faussée : les deux coins de la base étaient
-           placés à un rayon fixe et à ± 2,5 radians de la pointe, donc EN
-           ARRIÈRE du dernier point. Le bout arrondi du trait, large de sept
-           pixels, dépassait entre les deux côtés du triangle et dessinait une
-           encoche : la flèche avait l'air cassée.
+    }
 
-           La base se pose maintenant exactement sur le dernier point, en
-           travers, et sa demi-largeur dépasse le rayon du bout arrondi : le
-           trait est entièrement recouvert. */
-        const { x, y, ang } = this.pointe;
-        const dx = Math.cos(ang), dy = Math.sin(ang);
-        /* ⚠️ Deux corrections successives, la seconde parce qu'elle a dit
-           « on dirait qu'elle sort du parcours » :
-
-           · la tête faisait 15 px de long pour 19 de large, donc trapue.
-             Une flèche se lit quand elle est plus longue que large ;
-           · sa BASE était posée sur le dernier point et sa pointe dépassait
-             de 19 px au-delà. Elle sortait donc littéralement du tracé, et
-             pointait vers du vide. La pointe est maintenant SUR le dernier
-             point et la tête se pose en arrière, sur le trait qu'elle
-             recouvre. Elle est aussi plus courte : 13 px au lieu de 19.
-
-           La demi-base reste au-dessus du rayon du bout arrondi du trait,
-           3,5 px, sinon le trait dépasse sur les côtés et fait une encoche. */
-        const longueur = 13 / e, demiBase = 5 / e;
-        const bx = x - dx * longueur, by = y - dy * longueur;
-        ctx.fillStyle = SUITE;
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(bx - dy * demiBase, by + dx * demiBase);
-        ctx.lineTo(bx + dy * demiBase, by - dx * demiBase);
-        ctx.closePath();
-        ctx.fill();
+    /* Le sens du parcours, tout du long.
+       ⚠️ Remplace la flèche jaune au bout du surlignage. Trop longue, elle
+       dépassait du tracé et pointait dans le vide ; raccourcie et posée sur
+       le trait, elle ne faisait plus que 10 px de large sur un trait de 7 et
+       elle a « disparu ». Une flèche au bout ne disait de toute façon le sens
+       qu'à un seul endroit, et seulement pendant la course : sur l'écran où
+       l'on choisit, rien ne disait dans quel sens tourner. */
+    if (this.pointsM) {
+      const pas = pasPour(e);
+      if (!this.chevrons || this.chevrons.pas !== pas) {
+        this.chevrons = {
+          pas,
+          liste: placerChevrons(this.pointsM, pas,
+            { depuis: this.suiviIndice ?? undefined, sens: this.suiviSens })
+        };
       }
+      /* Plus larges que le trait, qui fait 5 px : sinon ils s'y fondent,
+         et c'est exactement ce qui avait fait disparaître la tête jaune. */
+      const long = 4.4 / e, large = 6 / e;
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const chemin = new Path2D();
+      for (const { x, y, ang } of this.chevrons.liste) {
+        const dx = Math.cos(ang), dy = Math.sin(ang);
+        const bx = x - dx * long, by = y - dy * long;
+        chemin.moveTo(bx - dy * large, by + dx * large);
+        chemin.lineTo(x + dx * long, y + dy * long);
+        chemin.lineTo(bx + dy * large, by - dx * large);
+      }
+      ctx.strokeStyle = CHEVRON_HALO;
+      ctx.lineWidth = 5.5 / e;
+      ctx.stroke(chemin);
+      ctx.strokeStyle = CHEVRON;
+      ctx.lineWidth = 2.6 / e;
+      ctx.stroke(chemin);
+      ctx.restore();
     }
 
     /* Le nombre de tours, au centre de la boucle. Il se dessine AVANT le

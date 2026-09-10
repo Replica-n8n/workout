@@ -78,3 +78,14 @@ test('la requête exclut les voies rapides et demande un délai serveur', () => 
   // divise le poids de la réponse.
   assert.match(q, /out skel qt;/);
 });
+
+test('la requête ramène le contour des parcs, et seulement des parcs', () => {
+  /* `lib/parc.js` a besoin du contour pour faire le tour d'un parc. Sans
+     cette ligne, la carte « Au parc » ne s'afficherait jamais, sans que rien
+     ne le signale. */
+  const q = requete({ sud: 45.5, ouest: -73.6, nord: 45.52, est: -73.58 });
+  assert.match(q, /way\["leisure"="park"\]\["name"\]\([^)]*\);\s*out tags geom qt;/);
+  /* Et la géométrie ne vaut QUE pour les parcs : la demander pour les
+     commerces ou les stations alourdirait la réponse pour rien. */
+  assert.equal((q.match(/out tags geom/g) || []).length, 1);
+});

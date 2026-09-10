@@ -299,6 +299,15 @@ const PART_AMORCE_MAX = 0.30;
  * @returns {object|null} même forme qu'une boucle ordinaire, plus `.etapes`,
  *   `.tours` et `.approcheM`
  */
+/**
+ * Ce qui fait qu'un parcours à retenir est « le même » : ses rues, sans
+ * l'ordre ni le sens. Deux circuits qui prennent les mêmes quatre rues se
+ * récitent pareil, et les proposer l'un après l'autre ne changerait rien.
+ */
+export function signature(etapes) {
+  return [...new Set((etapes || []).filter(e => !e.approche).map(e => e.nom))].sort().join('|');
+}
+
 export function parcoursSimple(graphe, o) {
   const centre = o.depart;
   const cible = o.distanceCible;
@@ -485,9 +494,12 @@ export function parcoursSimple(graphe, o) {
 
   /* --- puis à pied, pour de vrai --- */
   let meilleur = null;
+  /* Les circuits déjà montrés, que « Autres parcours » doit sauter. */
+  const exclure = o.exclure || null;
   for (const c of candidats.slice(0, MAX_ROUTES)) {
     const fait = aPiedLeCircuit(graphe, cors, c, depart, cible);
     if (!fait) continue;
+    if (exclure && exclure.has(signature(fait.etapes))) continue;
     /* Le moins allumé gagne : c'est le seul axe sur lequel ce parcours est en
        retard sur les boucles ordinaires, donc le seul qui vaille un tri. */
     if (!meilleur || fait.feux < meilleur.feux ||
@@ -497,9 +509,12 @@ export function parcoursSimple(graphe, o) {
 
   const b = mesurer(graphe, meilleur.ids, meilleur.m,
                     waysDuChemin(graphe, meilleur.ids), centre);
+  b.genre = 'simple';
+  b.signature = signature(meilleur.etapes);
   b.etapes = meilleur.etapes;
   b.tours = meilleur.tours;
   b.tourM = Math.round(meilleur.tourM);
+  b.centreTour = meilleur.centreTour;
   b.approcheM = Math.round(meilleur.approcheM);
   /* ⚠️ `mesurer` compte les nœuds DISTINCTS : sur trois tours il ne verrait
      les feux qu'une fois, alors qu'on s'y arrête à chaque passage. La carte
@@ -594,7 +609,12 @@ function aPiedLeCircuit(graphe, cors, c, depart, cible) {
     feux += surAmorce.size * 2;
   }
 
-  const sortie = { ids, m, feux, tours, tourM, approcheM: amorce ? amorce.m : 0, etapes };
+  /* Le centre du TOUR, pour y poser le « 3× » : celui du tracé entier
+     serait tiré vers l'amorce, faite deux fois. */
+  let sla = 0, slo = 0;
+  for (const id of tour) { const nd = graphe.noeuds.get(id); sla += nd.lat; slo += nd.lon; }
+  const centreTour = { lat: sla / tour.length, lon: slo / tour.length };
+  const sortie = { ids, m, feux, tours, tourM, approcheM: amorce ? amorce.m : 0, etapes, centreTour };
   if (amorce) {
     /* L'amorce est une étape comme les autres : elle se retient aussi. */
     const nom = nomDuNoeud(graphe, c.accroche) || etapes[0].nom;

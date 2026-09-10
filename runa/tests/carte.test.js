@@ -54,23 +54,57 @@ test('des dimensions absurdes retombent sur le plancher', () => {
   assert.ok(echellePour(360, 430, Infinity, 1500) >= ECHELLE_MIN);
 });
 
-test('changer de parcours efface le surlignage et la flèche', () => {
-  /* Le défaut vu sur un Pixel 9a : en passant d'une boucle à l'autre, la
-     flèche jaune de la précédente restait quelques secondes par-dessus le
-     nouveau tracé, en indiquant un sens qui n'était plus le bon. Elle ne
-     disparaîssait qu'à la relevée GPS suivante. */
+test('changer de parcours efface le surlignage et les chevrons de l’autre', () => {
+  /* Le défaut vu sur un Pixel 9a : en passant d'une boucle à l'autre, le
+     sens de la précédente restait quelques secondes par-dessus le nouveau
+     tracé, en indiquant une direction qui n'était plus la bonne. Il ne
+     disparaissait qu'à la relevée GPS suivante. La flèche jaune a laissé la
+     place aux chevrons, la règle reste la même. */
   const c = fausseCarte();
   const boucle = { points: [{ lat: 45.52, lon: -73.58 }, { lat: 45.53, lon: -73.57 },
                             { lat: 45.52, lon: -73.56 }] };
   c.montrer(boucle, { lat: 45.52, lon: -73.58 });
-  c.suivre({ lat: 45.522, lon: -73.578 }, boucle.points);
+  c.suivre({ lat: 45.522, lon: -73.578 }, boucle.points, { indice: 1, sens: -1 });
   assert.ok(c.restant, 'le surlignage doit exister avant');
+  const anciens = c.chevrons;
 
   c.montrer({ points: [{ lat: 45.50, lon: -73.60 }, { lat: 45.51, lon: -73.59 },
                        { lat: 45.50, lon: -73.58 }] }, { lat: 45.50, lon: -73.60 });
   assert.equal(c.restant, null);
-  assert.equal(c.pointe, null);
+  /* `montrer` redessine aussitôt, et le dessin repose les chevrons : ils ne
+     sont donc pas vides, ils doivent être NEUFS. */
+  assert.notEqual(c.chevrons, anciens, 'les chevrons de l’ancien tracé sont restés');
+  assert.equal(c.suiviSens, 1, 'le sens de l’ancienne course est resté');
+  assert.equal(c.suiviIndice, null);
   assert.equal(c.moi, null);
+});
+
+test('la tête jaune a disparu, pour de bon', () => {
+  /* Trop longue, elle sortait du tracé ; raccourcie, elle ne faisait plus
+     que 10 px de large sur un trait de 7 et on ne la voyait plus. Elle a été
+     remplacée par des chevrons le long de tout le tracé. Si elle revenait,
+     les deux diraient le sens en même temps. */
+  const c = fausseCarte();
+  const boucle = { points: [{ lat: 45.52, lon: -73.58 }, { lat: 45.53, lon: -73.57 },
+                            { lat: 45.52, lon: -73.56 }] };
+  c.montrer(boucle, { lat: 45.52, lon: -73.58 });
+  c.suivre({ lat: 45.522, lon: -73.578 }, boucle.points, { indice: 0 });
+  assert.equal(c.pointe, undefined);
+  assert.equal(typeof c.reculDe, 'undefined');
+});
+
+test('un nouveau relevé qui change le sens repose les chevrons', () => {
+  /* Sans ça, courir la boucle à l'envers laissait les chevrons dans le sens
+     du tracé, donc à contresens de la coureuse. */
+  const c = fausseCarte();
+  const boucle = { points: [{ lat: 45.52, lon: -73.58 }, { lat: 45.53, lon: -73.57 },
+                            { lat: 45.52, lon: -73.56 }] };
+  c.montrer(boucle, { lat: 45.52, lon: -73.58 });
+  const marque = { pas: 100, liste: [] };
+  c.chevrons = marque;
+  c.suivre({ lat: 45.522, lon: -73.578 }, boucle.points, { indice: 1, sens: -1 });
+  assert.notEqual(c.chevrons, marque, 'les chevrons n’ont pas été reposés');
+  assert.equal(c.suiviSens, -1);
 });
 
 test('les couches du quartier ne se dessinent pas sur l’écran de choix', () => {
@@ -91,38 +125,7 @@ test('un terrain vide ou dégénéré ne laisse pas de chemin fantôme', () => {
   assert.equal(c.terrain, null, 'deux points ne font pas une surface');
 });
 
-test('le cap de la flèche se prend sur une distance, pas sur 4 points', () => {
-  /* Mesuré sur une vraie boucle : quatre points couvraient de 8 à 208 m selon
-     l'endroit, et le cap qui en sortait s'écartait jusqu'à 80° de la
-     direction du trait. La tête paraissait collée de travers. */
-  const c = fausseCarte();
-  c.poserOrigine({ lat: 45.52, lon: -73.58 });
-
-  /* Un tracé qui monte plein nord sur 100 m, avec quatre points très
-     rapprochés au bout : les quatre derniers ne couvrent que 3 m. */
-  const ky = 6371008.8 * Math.PI / 180;
-  const nord = m => ({ lat: 45.52 + m / ky, lon: -73.58 });
-  const points = [nord(0), nord(50), nord(97), nord(98), nord(99), nord(100)];
-
-  c.suivre({ lat: 45.52, lon: -73.58 }, points);
-  assert.ok(c.pointe, 'la pointe doit exister');
-
-  // Plein nord : y décroît vers le haut, donc l'angle vaut -π/2.
-  assert.ok(Math.abs(c.pointe.ang + Math.PI / 2) < 0.05,
-    `cap ${(c.pointe.ang * 180 / Math.PI).toFixed(0)}° au lieu de -90°`);
-});
-
-test('un coude juste avant le bout ne fait pas pivoter la tête', () => {
-  const c = fausseCarte();
-  c.poserOrigine({ lat: 45.52, lon: -73.58 });
-  const ky = 6371008.8 * Math.PI / 180;
-  const kx = ky * Math.cos(45.52 * Math.PI / 180);
-  const p = (x, y) => ({ lat: 45.52 + y / ky, lon: -73.58 + x / kx });
-
-  /* Cent mètres vers l'est, puis un crochet de 4 m vers le nord au bout. */
-  const points = [p(0, 0), p(60, 0), p(100, 0), p(102, 0), p(104, 0), p(104, 4)];
-  c.suivre({ lat: 45.52, lon: -73.58 }, points);
-  const deg = c.pointe.ang * 180 / Math.PI;
-  // Le crochet final ne pese que 4 m sur les 25 lus : le cap reste vers l'est.
-  assert.ok(Math.abs(deg) < 25, `cap ${deg.toFixed(0)}°, la tête a pivoté`);
-});
+/* Les deux tests sur le cap de la flèche jaune vivent désormais dans
+   `tests/chevrons.test.js` : un chevron lit sa direction sur une distance
+   autour de lui, pour la même raison qu'elle, et un crochet de quelques
+   mètres ne doit pas le faire pivoter. */

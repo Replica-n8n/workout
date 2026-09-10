@@ -48,20 +48,61 @@ const SILENCE_MAX = 75000;
    erreur, et l'app paraît figée au prochain déploiement du schéma. */
 let connexion = null;
 
+/**
+ * La connexion à la base, ou `null` si elle est indisponible.
+ *
+ * ⚠️ Ne rejette JAMAIS et ne reste JAMAIS en suspens. Une base bloquée ou
+ * refusée prive l'app de sa mémoire, elle ne doit pas l'empêcher de
+ * chercher : sans base, on télécharge, comme au premier lancement.
+ *
+ * Trouvé par la revue de la 1.13.0 : monter la base en version 3 déclenche
+ * une mise à niveau, et si une autre page de Runa garde la version 2
+ * ouverte, le navigateur la met en ATTENTE sans succès ni erreur. `ouvrir`
+ * ne se résolvait donc jamais, et la recherche restait figée sur « Calcul
+ * des boucles… », sans un mot.
+ */
 function ouvrir() {
   if (connexion) return connexion;
-  connexion = new Promise((ok, ko) => {
+  connexion = new Promise(ok => {
+    let regle = false;
+    const finir = db => {
+      /* Une ouverture débloquée APRÈS qu'on a renoncé : on la referme, sinon
+         c'est elle qui bloquerait la prochaine montée de version. */
+      if (regle) { if (db) db.close(); return; }
+      regle = true;
+      if (!db) connexion = null;   // on retentera au prochain appel
+      ok(db);
+    };
     /* Version 2 : les zones de la version 1 ont été téléchargées sans les
        points d'intérêt. Les garder donnerait des cartes partagées sans
        aucun repère, sans que rien ne le signale. On repart de zéro : c'est
-       un téléchargement de plus, une fois. */
-    const r = indexedDB.open(BASE, 2);
+       un téléchargement de plus, une fois.
+
+       Version 3, même raison : les zones de la version 2 n'ont pas le
+       CONTOUR des parcs. Les garder, c'était ne jamais proposer le tour du
+       parc à qui avait déjà ouvert l'app dans son quartier, sans rien qui
+       dise pourquoi, jusqu'à ce que la zone périme d'elle-même. */
+    let r;
+    try {
+      r = indexedDB.open(BASE, 3);
+    } catch (e) {
+      finir(null);   // navigation privée, stockage refusé
+      return;
+    }
     r.onupgradeneeded = () => {
       if (r.result.objectStoreNames.contains(MAGASIN)) r.result.deleteObjectStore(MAGASIN);
       r.result.createObjectStore(MAGASIN);
     };
-    r.onsuccess = () => ok(r.result);
-    r.onerror = () => { connexion = null; ko(r.error); };
+    r.onsuccess = () => {
+      const db = r.result;
+      /* À la PROCHAINE montée de version, c'est cette page-ci qui gênerait
+         la nouvelle : elle rend la main au lieu de la bloquer. */
+      db.onversionchange = () => { db.close(); connexion = null; };
+      finir(db);
+    };
+    r.onerror = () => finir(null);
+    /* Une autre page garde l'ancienne version ouverte. */
+    r.onblocked = () => finir(null);
   });
   return connexion;
 }
@@ -73,8 +114,13 @@ function ouvrir() {
  */
 async function lire(centre, rayonM) {
   const db = await ouvrir();
+  if (!db) return null;
   return new Promise((ok) => {
-    const c = db.transaction(MAGASIN, 'readonly').objectStore(MAGASIN).openCursor();
+    let c;
+    /* La connexion a pu être refermée entre-temps par une montée de
+       version : `transaction` lève alors, et on fait comme sans mémoire. */
+    try { c = db.transaction(MAGASIN, 'readonly').objectStore(MAGASIN).openCursor(); }
+    catch (e) { connexion = null; return ok(null); }
     c.onsuccess = () => {
       const curseur = c.result;
       if (!curseur) return ok(null);
@@ -90,9 +136,12 @@ async function lire(centre, rayonM) {
 
 async function ecrire(centre, rayonM, osm) {
   const db = await ouvrir();
+  if (!db) return false;
   const cle = `z${centre.lat.toFixed(4)}:${centre.lon.toFixed(4)}:${Math.round(rayonM)}`;
   return new Promise((ok) => {
-    const t = db.transaction(MAGASIN, 'readwrite').objectStore(MAGASIN);
+    let t;
+    try { t = db.transaction(MAGASIN, 'readwrite').objectStore(MAGASIN); }
+    catch (e) { connexion = null; return ok(false); }
     t.put({ osm, lat: centre.lat, lon: centre.lon, rayon: rayonM, date: Date.now() }, cle);
     t.transaction.oncomplete = () => ok(true);
     t.transaction.onerror = () => ok(false);   // un cache plein ne doit rien casser

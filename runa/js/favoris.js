@@ -58,6 +58,26 @@ export function estGarde(boucle) {
   return lireTout().some(f => memeParcours(f, boucle));
 }
 
+/**
+ * Ce qui décrit la FORME d'un parcours, au-delà de son tracé : le genre de
+ * sortie, le parc, les tours, les rues à retenir.
+ *
+ * ⚠️ Partagé avec la reprise d'une course interrompue. Ni l'une ni l'autre ne
+ * gardait ces champs : une sortie au parc reprise après qu'Android avait tué
+ * l'app perdait son « 2× » sur la carte et sa marque « Au parc », alors que
+ * c'est précisément ce qu'on veut lire d'un coup d'œil en courant. Une seule
+ * liste pour les deux, sinon elles finiront par diverger.
+ */
+export const CHAMPS_DE_FORME = ['genre', 'parc', 'tours', 'tourM', 'approcheM',
+  'centreTour', 'etapes', 'feuxDansLeParc'];
+
+/** Les champs de forme présents dans une boucle, prêts à être stockés. */
+export function forme(boucle) {
+  const f = {};
+  for (const c of CHAMPS_DE_FORME) if (boucle && boucle[c] != null) f[c] = boucle[c];
+  return f;
+}
+
 /** @returns {boolean} vrai si le parcours a été ajouté, faux s'il y était déjà */
 export function garder(boucle) {
   const liste = lireTout();
@@ -72,7 +92,8 @@ export function garder(boucle) {
     // Les ways servent à l'exploration du quartier : savoir quelles rues on
     // a déjà courues demande leurs identifiants, pas seulement le dessin.
     ways: boucle.ways ? [...boucle.ways] : [],
-    points: boucle.points
+    points: boucle.points,
+    ...forme(boucle)
   });
   return ecrireTout(liste);
 }

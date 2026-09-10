@@ -21,6 +21,7 @@ import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
 import { echapper } from '../lib/texte.js';
 import { parcoursSimple } from '../lib/simple.js';
+import { contoursDesParcs, parcoursAuParc } from '../lib/parc.js';
 import { feraNuit, minutesDeJour } from '../lib/soleil.js';
 import { meteo, phrase as phraseMeteo } from '../lib/meteo.js';
 
@@ -47,6 +48,7 @@ const etat = {
   grapheDe: null,       // le départ pour lequel le graphe a été construit
   carrefours: [],       // les croisements nommés, pour dire où l'on est
   reperes: null,        // parcs, stations, tables, pour l'image partagée
+  parcs: [],            // les parcs AVEC leur contour, pour en faire le tour
   boucles: [],
   choisie: 0,
   enCourse: false,
@@ -293,7 +295,10 @@ function sauverParcours(b) {
       m: b.m, feux: b.feux, rues: b.rues,
       fractionEclairee: b.fractionEclairee,
       // Six décimales valent environ 10 cm : au-delà on stockerait du bruit.
-      points: b.points.map(p => [+p.lat.toFixed(6), +p.lon.toFixed(6)])
+      points: b.points.map(p => [+p.lat.toFixed(6), +p.lon.toFixed(6)]),
+      /* Les tours, le parc, les rues à retenir : sans eux, une course reprise
+         après qu'Android a tué l'app perdait son « 2× » sur la carte. */
+      ...favoris.forme(b)
     }));
   } catch (e) { /* stockage plein ou refusé : on continue sans filet */ }
 }
@@ -447,6 +452,7 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
      coûterait un dixième de seconde pour un nom de carrefour. */
   etat.carrefours = indexerCarrefours(etat.graphe);
   etat.reperes = reperes(osm);
+  etat.parcs = contoursDesParcs(osm);
   carte.poserReperes(etat.reperes);
   // ⚠️ Garder l'origine existante si la carte a déjà dessiné quelque chose :
   // `charger` reconstruit les rues dans le repère qu'on lui donne, et un
@@ -520,69 +526,94 @@ function retenir(candidates, cible) {
   });
 }
 
-/* ------------------------------------------------- le parcours à retenir */
+/* ------------------------------------------- les propositions en plus */
 
 /**
- * Cherche le parcours en quelques rues et l'ajoute à la liste s'il existe.
+ * Ajoute à la liste une proposition calculée À PART : le parcours à
+ * retenir, le tour du parc.
  *
- * ⚠️ APRÈS l'affichage des trois autres, et jamais pendant. Le calcul prend
- * jusqu'à trois secondes ici, donc dix sur un téléphone : le faire avant
- * laisserait l'écran vide tout ce temps, alors que les boucles ordinaires
- * sont déjà prêtes. Il arrive quand il arrive, et la liste s'allonge.
+ * ⚠️ APRÈS l'affichage des trois boucles, et jamais pendant. Le parcours à
+ * retenir prend jusqu'à trois secondes ici, donc dix sur un téléphone : le
+ * calculer avant laisserait l'écran vide tout ce temps, alors que les
+ * boucles ordinaires sont déjà prêtes. Il arrive quand il arrive, et la
+ * liste s'allonge.
  *
- * Rendre `null` est un résultat, pas une panne : tous les quartiers n'ont pas
- * de longues rues droites qui se croisent, et on préfère se taire plutôt que
- * de proposer un mauvais parcours. Rien n'est donc annoncé à l'avance.
+ * Rendre `null` est un résultat, pas une panne : tous les quartiers n'ont
+ * pas de rues longues qui se croisent ni de grand parc à portée, et on
+ * préfère se taire plutôt que de proposer un mauvais parcours.
+ *
+ * Cette logique était écrite pour le seul parcours à retenir. Le parc en
+ * avait besoin à l'identique : une seule fonction pour les deux, plutôt
+ * qu'une copie qui aurait fini par diverger.
+ *
+ * @param {string} genre       'simple' ou 'parc', unique dans la liste
+ * @param {(exclure:Set<string>|null) => object|null} calcul
+ * @param {number} cible
+ * @param {boolean} [renouveler]  vrai pour « Autres parcours » : on veut le
+ *   SUIVANT, pas celui déjà montré
  */
-/* Le parcours à retenir ne dépend NI du mode NI de la graine : il n'y en a
-   qu'un par quartier et par distance. Or toucher un onglet relance une
+/* Ces propositions ne dépendent NI du mode NI de la graine : il n'y en a
+   qu'une par quartier et par distance. Or toucher un onglet relance une
    recherche complète, et sans cette mémoire on repayait trois secondes de
    calcul à chaque aller-retour entre découverte et conquête. */
-let dernierSimple = null;
+const dernieres = new Map();   // genre -> { cle, graphe, b, vus }
 
-function ajouterLeSimple(cible) {
+/* L'ordre des cartes en bas de liste, quel que soit l'ordre d'arrivée : sans
+   lui, un parc tiré de la mémoire passait avant un parcours à retenir encore
+   en calcul, et les cartes changeaient de place d'une recherche à l'autre. */
+const RANG = { simple: 1, parc: 2 };
+
+function ajouterUneProposition(genre, calcul, cible, renouveler = false) {
   const graine = etat.graine;
   const graphe = etat.graphe;
   const cle = `${etat.depart.lat.toFixed(4)},${etat.depart.lon.toFixed(4)},${Math.round(cible)}`;
 
-  if (dernierSimple && dernierSimple.cle === cle && dernierSimple.graphe === graphe) {
-    if (dernierSimple.b && !etat.enCourse && !$('resultats').hidden) {
-      etat.boucles.push(dernierSimple.b);
-      peindreCartes();
-      const n = etat.boucles.length;
-      $('resume').textContent =
-        `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
-    }
-    return;
-  }
-  /* Un temps mort avant de calculer : sans lui, le rendu des trois premières
-     cartes serait retardé par ce calcul, et l'écran resterait blanc. */
-  setTimeout(() => {
-    let b = null;
-    try {
-      b = parcoursSimple(graphe, { depart: etat.depart, distanceCible: cible });
-    } catch (e) {
-      b = null;   // une proposition en plus ne doit jamais casser l'écran
-    }
-    /* Retenu même quand il n'y a rien : « ce quartier n'en porte pas » est un
-       résultat, et le recalculer à chaque onglet coûterait aussi cher. */
-    dernierSimple = { cle, graphe, b };
-    /* L'utilisatrice a pu relancer une recherche, changer de mode ou partir
-       courir pendant le calcul. Dans ce cas le résultat ne concerne plus ce
-       qui est à l'écran. */
-    if (!b || graine !== etat.graine || graphe !== etat.graphe) return;
-    if (etat.enCourse || $('resultats').hidden) return;
-    if (etat.boucles.some(x => x.etapes)) return;
-
-    /* Pas de `score` : la suite des rues est déjà écrite sur la carte, et
-       « 4 rues à retenir » juste en dessous ne fait que répéter ce qu'on
-       vient de lire. */
+  const poser = b => {
+    /* Elle a pu relancer une recherche ou partir courir pendant le calcul :
+       le résultat ne concerne plus ce qui est à l'écran. */
+    if (!b || etat.enCourse || $('resultats').hidden) return;
+    if (etat.boucles.some(x => x.genre === genre)) return;
+    const choisie = etat.boucles[etat.choisie];
     etat.boucles.push(b);
+    etat.boucles.sort((x, y) => (RANG[x.genre] || 0) - (RANG[y.genre] || 0));
+    etat.choisie = Math.max(0, etat.boucles.indexOf(choisie));
     peindreCartes();
-    /* Le résumé disait « 3 boucles » alors qu'il y en a quatre à l'écran. */
+    /* Le résumé disait « 3 boucles » alors qu'il y en avait quatre. */
     const n = etat.boucles.length;
     $('resume').textContent =
       `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+  };
+
+  const connu = dernieres.get(genre);
+  const meme = connu && connu.cle === cle && connu.graphe === graphe;
+  if (meme && !renouveler) { poser(connu.b); return; }
+
+  /* ⚠️ « Autres parcours » renouvelait les trois boucles, mais ce parcours-ci
+     revenait identique : il est mis en mémoire par quartier et par distance,
+     exprès, pour ne pas le recalculer à chaque onglet. Vu par elle : « je
+     vois encore le même 4e parcours ». On demande donc le suivant en sautant
+     ceux déjà montrés, et on repart du premier une fois tous passés. */
+  const vus = meme && renouveler ? connu.vus : new Set();
+
+  /* Un temps mort avant de calculer : sans lui, le rendu des trois
+     premières cartes serait retardé par ce calcul, et l'écran resterait
+     blanc. */
+  setTimeout(() => {
+    let b = null;
+    try {
+      b = calcul(vus.size ? vus : null);
+      /* Tous montrés : on reprend au début plutôt que de faire disparaître
+         la carte, ce qui se lirait comme une panne. */
+      if (!b && vus.size) { vus.clear(); b = calcul(null); }
+    } catch (e) {
+      b = null;   // une proposition en plus ne doit jamais casser l'écran
+    }
+    if (b && b.signature) vus.add(b.signature);
+    /* Retenu même quand il n'y a rien : « ce quartier n'en porte pas » est
+       un résultat, et le recalculer à chaque onglet coûterait aussi cher. */
+    dernieres.set(genre, { cle, graphe, b, vus });
+    if (graine !== etat.graine || graphe !== etat.graphe) return;
+    poser(b);
   }, 0);
 }
 
@@ -637,7 +668,13 @@ async function chercher(nouvelleGraine) {
     etat.enCourse = false;
     montrerResultats(cible);
     dire(null);
-    ajouterLeSimple(cible);
+    const graphe = etat.graphe, depart = etat.depart, parcs = etat.parcs;
+    ajouterUneProposition('simple',
+      exclure => parcoursSimple(graphe, { depart, distanceCible: cible, exclure }),
+      cible, nouvelleGraine);
+    ajouterUneProposition('parc',
+      exclure => parcoursAuParc(graphe, parcs, { depart, distanceCible: cible, exclure }),
+      cible, nouvelleGraine);
   } catch (e) {
     direUneErreur(message(e));
   } finally {
@@ -1166,8 +1203,12 @@ function peindreCartes() {
     /* La dernière étape n'est écrite que si c'est une AUTRE rue que la
        première : le plus souvent c'est la rue du départ qui ramène, et la
        relire ne dit rien de neuf. */
-    const chaine = b.etapes ? rueParRue(b.etapes) : null;
-    const par = chaine ? chaine : (rue ? `par ${nommer(rue.nom)}` : '');
+    const chaine = b.etapes && b.etapes.length ? rueParRue(b.etapes) : null;
+    /* Le parc se nomme en premier : c'est pour lui qu'on choisit cette
+       sortie, et les rues ne disent que comment y aller. */
+    const par = b.genre === 'parc'
+      ? `<b>${echapper(b.parc)}</b>${chaine ? ', par ' + chaine : ''}`
+      : chaine ? chaine : (rue ? `par ${nommer(rue.nom)}` : '');
 
     /* Le critère qui manquait pour trancher entre trois boucles de même
        longueur. Il n'apparaît que s'il a été calculé : une boucle restaurée
@@ -1175,7 +1216,13 @@ function peindreCartes() {
        « 0 % » serait pire que se taire. */
     const score = b.score == null ? '' : `<span class="score">${b.score}</span>`;
 
-    const marque = b.etapes ? '<span class="marque">À retenir</span>' : '';
+    const marque = b.genre === 'parc' ? '<span class="marque">Au parc</span>'
+                 : b.genre === 'simple' ? '<span class="marque">À retenir</span>' : '';
+    /* « 16 feux » sans plus se lit comme un parcours plein d'arrêts. Ils sont
+       en fait tous sur le trajet pour rejoindre le parc, et aucun dans les
+       tours : c'est précisément ce qui fait l'intérêt de cette sortie. */
+    const ouSontLesFeux = b.genre === 'parc' && b.feux > 0 && b.feuxDansLeParc === 0
+      ? ', tous sur l’accès' : '';
     /* ⚠️ Les tours doivent se lire AVANT de choisir. Quatre tours d'un
        kilomètre et une boucle unique de quatre kilomètres ne sont pas la même
        sortie, et l'un des deux se retient sans rien regarder. */
@@ -1183,15 +1230,15 @@ function peindreCartes() {
       ? `<span class="tours">${b.tours} tours de ${nombre(b.tourM / 1000, 2)} km</span>` : '';
     el.innerHTML =
       `<span class="km">${(b.m / 1000).toFixed(2)} km${marque}</span>` +
-      `<span class="detail">${par}<br>${feux}${feux ? ' · ' : ''}${minutes} min${eclaire}${tours}${score}</span>` +
+      `<span class="detail">${par}<br>${feux}${ouSontLesFeux}${feux ? ' · ' : ''}${minutes} min${eclaire}${tours}${score}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
-      (b.etapes ? 'Parcours à retenir, ' : '') +
+      (b.genre === 'parc' ? `Au parc, ${b.parc}, ` : b.genre === 'simple' ? 'Parcours à retenir, ' : '') +
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
-      (b.etapes ? `, par ${b.etapes.map(e => nommerBrut(e.nom)).join(', puis ')}`
+      (b.etapes && b.etapes.length ? `, par ${b.etapes.map(e => nommerBrut(e.nom)).join(', puis ')}`
                 : rue ? `, ${nommerBrut(rue.nom)}` : '') +
       (b.tours > 1 ? `, ${b.tours} tours` : '') +
-      (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') +
+      (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') + (ouSontLesFeux ? ', tous sur l’accès' : '') +
       `, environ ${minutes} minutes` +
       (b.score ? `, ${b.score}` : ''));
     el.addEventListener('click', () => { etat.choisie = i; ouvrirResultats(); });
@@ -1280,7 +1327,9 @@ function surPosition(p) {
   if (!a || a.ecartM > ECART_MAX_M) {
     // Mieux vaut dire qu'on ne sait pas que de surligner une direction au
     // hasard : c'est exactement le moment où on suivrait le mauvais côté.
-    carte.suivre(moi, null);
+    /* L'indice et le sens restent ceux du dernier relevé sur le parcours :
+       sortir du tracé un instant ne doit pas retourner les chevrons. */
+    carte.suivre(moi, null, { indice, sens });
     ligne.className = 'pied dehors';
     ligne.innerHTML = `Vous êtes à <b>${Math.round(a ? a.ecartM : 0)} m</b> du parcours.`;
     if (!recentre) { carte.centrerSur(moi); recentre = true; }
@@ -1292,14 +1341,15 @@ function surPosition(p) {
   if (derniers.length > 6) derniers.shift();
   sens = sensDeMarche(derniers, b.points.length, sens);
 
-  carte.suivre(moi, segmentSuivant(b.points, indice, sens, 400));
+  carte.suivre(moi, segmentSuivant(b.points, indice, sens, 400), { indice, sens });
   if (!recentre) { carte.centrerSur(moi); recentre = true; }
 
   const reste = metresQuiRestent(b);
   ligne.className = 'pied';
-  /* Plus de phrase pour expliquer ce que veut dire le jaune : la flèche le
-     dit d'elle-même, et une légende qu'on relit à chaque coup d'oeil est du
-     bruit. Il ne reste que le seul chiffre qu'on lit en courant. */
+  /* Plus de phrase pour expliquer ce que veut dire le jaune : les chevrons
+     disent le sens d'eux-mêmes, et une légende qu'on relit à chaque coup
+     d'oeil est du bruit. Il ne reste que le seul chiffre qu'on lit en
+     courant. */
   ligne.innerHTML = reste >= 1000
     ? `Encore <b>${(reste / 1000).toFixed(2)} km</b>`
     : `Encore <b>${reste} m</b>`;
