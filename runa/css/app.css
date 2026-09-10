@@ -23,27 +23,34 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* ⚠️ `height: 100%` sur `html` se résout sur le bloc conteneur initial,
-   c'est-à-dire sur le GRAND viewport, celui d'un navigateur mobile dont la
-   barre d'adresse serait masquée. Le corps de page, lui, fait 100dvh, donc
-   la hauteur réellement visible. Résultat sur un téléphone : `html` dépasse
-   d'exactement la hauteur de la barre d'adresse, et un ascenseur apparaît
-   alors que rien ne déborde. Invisible sur un écran d'ordinateur, où les
-   deux mesures sont égales : trouvé sur un Pixel 9a sous Brave. */
+/* ⚠️ LA HAUTEUR DE LA PAGE, cinquième et, cette fois, dernière approche.
+
+   Les quatre premières jouaient sur l'UNITÉ :
+   · `height: 100%` sur `html` se résolvait sur le grand viewport, celui d'une
+     barre d'adresse masquée : un ascenseur apparaissait sans que rien ne
+     déborde (Pixel 9a sous Brave) ;
+   · `100dvh` restait un ou deux pixels trop grand : ascenseur fantôme ;
+   · `overflow: hidden` en plus a COUPÉ le bouton principal, inatteignable ;
+   · `100svh` devait régler tout ça. Mais une règle `body { height: 100dvh }`
+     placée juste en dessous l'écrasait : la correction n'a jamais atteint le
+     corps de page, seulement `html`.
+
+   Et le défaut revenait « à chaque mise à jour », disait-elle : à chaque
+   version, le service worker fait recharger la page juste après son
+   ouverture. Sur ce rechargement le téléphone calculait une hauteur plus
+   grande que ce qu'il montrait, d'environ la barre de navigation. Le bas de
+   la page passait dessous. Et rien ne pouvait le faire remonter : le panneau
+   retient ses défilements (`overscroll-behavior: contain`) et la carte
+   capture tous les gestes (`touch-action: none`). Le bouton « Trouver trois
+   boucles » était coupé, sans aucun moyen de l'atteindre.
+
+   On ne demande donc plus d'unité du tout. Le corps est FIXÉ aux quatre bords
+   de la fenêtre : c'est le navigateur qui le dimensionne, sur ce qu'il
+   affiche réellement, et il le refait de lui-même à chaque changement, y
+   compris quand un rechargement règle ses marges après coup. */
 html, body {
   margin: 0;
   overscroll-behavior: none;
-
-  /* ⚠️ Quatrième tentative, et cette fois la bonne unité.
-     · `100dvh` suit la barre d'adresse, mais reste un ou deux pixels trop
-       grand sur un vrai téléphone : d'où l'ascenseur fantôme.
-     · y ajouter `overflow: hidden` a échangé un défaut contre un pire : le
-       bouton principal se retrouvait COUPÉ en bas, sans aucun moyen de
-       l'atteindre.
-     `100svh` est la hauteur quand toutes les barres du navigateur sont
-     visibles, donc la plus petite : la page tient toujours. On perd un peu
-     de place quand la barre se masque, on ne perd jamais un bouton. */
-  height: 100svh;
 }
 
 body {
@@ -52,19 +59,21 @@ body {
   font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   display: flex;
   flex-direction: column;
-  /* `height` et non `min-height` : avec min-height la page grandit et le
-     bouton principal glisse sous la ligne de flottaison. */
-  height: 100dvh;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
   padding-top: env(safe-area-inset-top);
 
   /* ⚠️ Sur un écran large, l'app s'étirait sur toute la fenêtre : des
      boutons de durée de 278 px, un panneau de 1440 px de large et une carte
      écrasée en bandeau. Ça se lit comme une app cassée alors qu'elle
      fonctionne. Elle est dessinée pour un téléphone : elle garde donc une
-     largeur de téléphone, centrée, quelle que soit la fenêtre. */
+     largeur de téléphone, centrée, quelle que soit la fenêtre. Avec les deux
+     bords posés, `margin: auto` centre la colonne. */
   max-width: 460px;
   margin: 0 auto;
-  position: relative;
   box-shadow: 0 0 0 1px var(--trait);
 }
 
@@ -75,7 +84,11 @@ body {
 /* ---------------------------------------------------------------- carte */
 
 #carte {
-  flex: 1;
+  /* Une base de 0 px, et non de 0 % : une base en pourcentage retombe sur la
+     taille propre du canevas si la hauteur du parent n'est pas encore
+     connue, et celle-ci vaut le DOUBLE de sa taille à l'écran sur un écran
+     dense. La carte repoussait alors le panneau hors de la page. */
+  flex: 1 1 0px;
   min-height: 0;          /* sans ça, la carte pousse le panneau dehors */
   width: 100%;
   display: block;
@@ -176,8 +189,9 @@ body {
 
 #panneau {
   /* Et si un panneau devenait vraiment trop grand, c'est LUI qui défile,
-     pas la page : rien ne devient inatteignable. */
-  max-height: 82svh;
+     pas la page : rien ne devient inatteignable. En pourcentage de la page,
+     pas en unité d'écran : c'est la page qu'il ne doit pas dépasser. */
+  max-height: 82%;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--panneau);
