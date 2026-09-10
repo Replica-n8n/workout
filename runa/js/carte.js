@@ -335,6 +335,8 @@ export class Carte {
   montrer(boucle, depart) {
     this.poserOrigine(depart || (boucle && boucle.points[0]));
     this.trace = null;
+    this.tours = null;
+    this.milieuTrace = null;
     /* ⚠️ Le surlignage et la flèche appartiennent à la boucle qu'on suivait,
        pas à celle qu'on affiche. Sans cette remise à zéro, ils restaient à
        l'écran par-dessus le nouveau tracé jusqu'à la prochaine relevée du
@@ -352,6 +354,19 @@ export class Carte {
         i ? p.lineTo(m.x, m.y) : p.moveTo(m.x, m.y);
       });
       this.trace = p;
+
+      /* Le nombre de tours, posé au milieu de la boucle.
+         ⚠️ Écrit sur la CARTE, pas seulement sur la fiche : « 3 tours de
+         1,60 km » en petites lettres sous le parcours ne se voit pas, et
+         trois tours d'un kilomètre ne sont pas la même sortie qu'une boucle
+         de trois kilomètres. C'est la première chose à comprendre, donc la
+         plus grosse à l'écran. */
+      if (boucle.tours > 1) {
+        this.tours = boucle.tours;
+        let sx = 0, sy = 0;
+        for (const pt of boucle.points) { const m = this.versM(pt); sx += m.x; sy += m.y; }
+        this.milieuTrace = { x: sx / boucle.points.length, y: sy / boucle.points.length };
+      }
     }
     this.depart = depart ? this.versM(depart) : null;
     this.dessiner();
@@ -645,19 +660,53 @@ export class Carte {
            trait est entièrement recouvert. */
         const { x, y, ang } = this.pointe;
         const dx = Math.cos(ang), dy = Math.sin(ang);
-        /* ⚠️ La tête faisait 15 px de long pour 19 de large : plus large que
-           longue, donc trapue. Une flèche se lit quand elle est plus longue
-           que large. La demi-base reste au-dessus du rayon du bout arrondi
-           du trait, 3,5 px, sinon le trait dépasse et fait une encoche. */
-        const longueur = 19 / e, demiBase = 7 / e;
+        /* ⚠️ Deux corrections successives, la seconde parce qu'elle a dit
+           « on dirait qu'elle sort du parcours » :
+
+           · la tête faisait 15 px de long pour 19 de large, donc trapue.
+             Une flèche se lit quand elle est plus longue que large ;
+           · sa BASE était posée sur le dernier point et sa pointe dépassait
+             de 19 px au-delà. Elle sortait donc littéralement du tracé, et
+             pointait vers du vide. La pointe est maintenant SUR le dernier
+             point et la tête se pose en arrière, sur le trait qu'elle
+             recouvre. Elle est aussi plus courte : 13 px au lieu de 19.
+
+           La demi-base reste au-dessus du rayon du bout arrondi du trait,
+           3,5 px, sinon le trait dépasse sur les côtés et fait une encoche. */
+        const longueur = 13 / e, demiBase = 5 / e;
+        const bx = x - dx * longueur, by = y - dy * longueur;
         ctx.fillStyle = SUITE;
         ctx.beginPath();
-        ctx.moveTo(x + dx * longueur, y + dy * longueur);
-        ctx.lineTo(x - dy * demiBase, y + dx * demiBase);
-        ctx.lineTo(x + dy * demiBase, y - dx * demiBase);
+        ctx.moveTo(x, y);
+        ctx.lineTo(bx - dy * demiBase, by + dx * demiBase);
+        ctx.lineTo(bx + dy * demiBase, by - dx * demiBase);
         ctx.closePath();
         ctx.fill();
       }
+    }
+
+    /* Le nombre de tours, au centre de la boucle. Il se dessine AVANT le
+       rond de départ pour ne jamais le masquer. */
+    if (this.tours && this.milieuTrace) {
+      /* ⚠️ On reste dans la transformation courante et on divise les tailles
+         par l'échelle, comme partout ailleurs ici. Reprojeter à la main avait
+         inversé l'axe vertical, que cette transformation n'inverse pas :
+         le chiffre partait de l'autre côté de la boucle. */
+      const { x, y } = this.milieuTrace;
+      ctx.save();
+      ctx.font = `700 ${40 / e}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const texte = this.tours + '×';
+      /* Un liseré sombre : le chiffre doit rester lisible sur le tracé vert
+         comme sur le fond noir, sans peindre un rectangle derrière. */
+      ctx.lineWidth = 6 / e;
+      ctx.strokeStyle = 'rgba(13, 15, 18, .85)';
+      ctx.lineJoin = 'round';
+      ctx.strokeText(texte, x, y);
+      ctx.fillStyle = TRACE;
+      ctx.fillText(texte, x, y);
+      ctx.restore();
     }
 
     if (this.depart) {
@@ -748,12 +797,25 @@ export class Carte {
     this.c.addEventListener('pointermove', e => { if (doigts.has(e.pointerId)) bouge(); });
     this.c.addEventListener('wheel', bouge, { passive: true });
 
-    addEventListener('resize', () => {
+    const recadrer = () => {
       // Recadrer, sauf si elle a déplacé la carte elle-même : reprendre la
       // main sur son cadrage serait plus agaçant qu'utile.
       if (this.cadre && !this.deplacee) this.cadrer(this.cadre);
       this.dessiner();
-    });
+    };
+    addEventListener('resize', recadrer);
+
+    /* ⚠️ `resize` ne suffit PAS : la carte est en `flex: 1` sous un panneau
+       dont la hauteur change sans que la fenêtre bouge, quand on passe des
+       réglages aux résultats ou qu'une quatrième carte s'ajoute. Entre ce
+       changement et le dessin suivant, le navigateur ÉTIRE l'ancienne image
+       pour remplir la nouvelle boîte, et un tracé penché paraît alors penché
+       autrement. C'est ce qu'elle décrit : « pendant une seconde il est
+       penché, pas droit ». Un observateur de taille suit la boîte
+       elle-même. */
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(recadrer).observe(this.c);
+    }
   }
 
   instantane(doigts) {
