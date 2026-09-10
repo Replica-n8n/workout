@@ -355,6 +355,11 @@ button.secondaire {
 .rangee > * { flex: 1; }
 
 .pied { font-size: .76rem; color: var(--gris); text-align: center; margin: 0; }
+/* La meteo se lit au meme rang que le reste des reglages, alignee a gauche
+   comme les lignes qu'elle complete, et non centree comme une note de bas
+   de page. */
+.pied.meteo { text-align: left; margin-top: -4px; }
+.pied.meteo[hidden] { display: none; }
 /* En course, ce qui reste à courir devient l'information principale de
    l'écran : c'est le seul chiffre qu'on lit en une seconde, bras tendu. */
 #course { display: flex; flex-direction: column; gap: 10px; }

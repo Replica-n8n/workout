@@ -21,6 +21,8 @@ import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
 import { echapper } from '../lib/texte.js';
 import { parcoursSimple } from '../lib/simple.js';
+import { feraNuit, minutesDeJour } from '../lib/soleil.js';
+import { meteo, phrase as phraseMeteo } from '../lib/meteo.js';
 
 const $ = id => document.getElementById(id);
 const CLE = 'runa-reglages-v1';
@@ -40,6 +42,7 @@ const etat = {
   allure: 360,          // secondes par km
   eviterFeux: true,
   nuit: false,
+  nuitChoisie: false,   // vrai dès qu'elle a touché l'option elle-même
   graphe: null,
   grapheDe: null,       // le départ pour lequel le graphe a été construit
   carrefours: [],       // les croisements nommés, pour dire où l'on est
@@ -80,6 +83,7 @@ function lireReglages() {
       allure: r.allure ?? 360,
       eviterFeux: r.eviterFeux ?? true,
       nuit: r.nuit ?? false,
+      nuitChoisie: r.nuitChoisie ?? false,
       mode: r.mode === 'conquete' ? 'conquete' : 'decouverte'
     });
   } catch (e) { /* premier lancement, ou stockage refusé */ }
@@ -89,14 +93,71 @@ function ecrireReglages() {
   try {
     localStorage.setItem(CLE, JSON.stringify({
       depart: etat.depart, duree: etat.duree, allure: etat.allure,
-      eviterFeux: etat.eviterFeux, nuit: etat.nuit, mode: etat.mode
+      eviterFeux: etat.eviterFeux, nuit: etat.nuit,
+      nuitChoisie: etat.nuitChoisie, mode: etat.mode
     }));
   } catch (e) {}
 }
 
 const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 
+/**
+ * Cale le mode nuit sur le soleil, sauf si elle en a decide autrement.
+ *
+ * Le telephone connait l'heure ET la position : lui faire cocher une case
+ * pour dire ce qu'il sait deja est du travail rendu a l'utilisatrice. Aucun
+ * reseau, le coucher du soleil se calcule.
+ *
+ * @returns {boolean} vrai si la valeur a change, donc si le graphe est perime
+ */
+function calerLaNuit() {
+  if (etat.nuitChoisie || !etat.depart) return false;
+  const voulu = feraNuit(etat.depart, etat.duree);
+  if (voulu === etat.nuit) return false;
+  etat.nuit = voulu;
+  return true;
+}
+
+/** Pourquoi l'option est dans cet etat, en une ligne. */
+function phraseDeNuit() {
+  if (etat.nuitChoisie) return etat.nuit ? 'Choisi : rues eclairees' : 'Choisi : peu importe';
+  if (!etat.depart) return 'Pour courir de nuit';
+  const reste = minutesDeJour(etat.depart);
+  if (reste == null) return 'Pour courir de nuit';
+  if (etat.nuit) {
+    return reste > 0
+      ? `Le jour tombe dans ${reste} min`
+      : 'Il fait nuit';
+  }
+  return `Encore ${Math.floor(reste / 60)} h ${reste % 60} min de jour`;
+}
+
+/**
+ * La meteo du depart, si on peut l'avoir.
+ *
+ * ⚠️ Rien n'attend ce resultat. C'est un supplement : hors ligne, en panne ou
+ * trop lent, la ligne reste absente et tout le reste de l'app fonctionne
+ * exactement pareil. L'invariant du depot est que rien ne depend du reseau
+ * une fois la page chargee, et une meteo bloquante le violerait.
+ */
+function chercherLaMeteo() {
+  if (!etat.depart) return;
+  const ou = etat.depart;
+  meteo(ou).then(m => {
+    /* Le depart a pu bouger pendant l'appel : la meteo d'ailleurs ne
+       concerne plus cet ecran. */
+    if (!m || etat.depart !== ou) return;
+    const texte = phraseMeteo(m);
+    const ligne = $('meteo');
+    if (!texte || !ligne) return;
+    ligne.textContent = texte;
+    ligne.hidden = false;
+  });
+}
+
 function peindreReglages() {
+  calerLaNuit();
+  chercherLaMeteo();
   $('durees').innerHTML = '';
   for (const d of DUREES) {
     const b = document.createElement('button');
@@ -111,6 +172,17 @@ function peindreReglages() {
   $('allure-val').textContent = mmss(etat.allure);
   $('opt-feux').setAttribute('aria-pressed', String(etat.eviterFeux));
   $('opt-nuit').setAttribute('aria-pressed', String(etat.nuit));
+  /* Le sous-titre dit POURQUOI l'option est cochée : une option qui se coche
+     toute seule sans rien dire se lit comme un défaut.
+
+     ⚠️ Protégé, contrairement au reste de cette fonction. Une ligne
+     d'explication ne doit JAMAIS pouvoir empêcher l'app de démarrer, et c'est
+     exactement ce qui est arrivé pendant le développement : un navigateur
+     servait l'ancien HTML avec le nouveau script, et toute l'app tombait sur
+     un `textContent` de `null`. Le reste de la fonction touche des éléments
+     sans lesquels l'écran n'a de toute façon aucun sens. */
+  const pourquoi = $('nuit-pourquoi');
+  if (pourquoi) pourquoi.textContent = phraseDeNuit();
 
   peindreDepart();
 
@@ -517,6 +589,9 @@ async function chercher(nouvelleGraine) {
       ecrireReglages();
     }
 
+    /* ⚠️ AVANT `assurerQuartier` : caler la nuit change les poids du graphe,
+       et le faire après laisserait chercher sur l'ancien. */
+    if (calerLaNuit()) etat.grapheDe = null;
     const cible = distancePour(etat.duree * 60, etat.allure);
     await assurerQuartier(cible);
 
@@ -1234,7 +1309,12 @@ $('opt-feux').addEventListener('click', () => {
   etat.grapheDe = null;   // le poids des arêtes change, le graphe est à refaire
 });
 $('opt-nuit').addEventListener('click', () => {
-  etat.nuit = !etat.nuit; ecrireReglages(); peindreReglages();
+  etat.nuit = !etat.nuit;
+  /* ⚠️ Un choix manuel doit tenir. Sans cette marque, la bascule automatique
+     reviendrait par-dessus au prochain écran, et l'option paraîtrait
+     ignorer les touchers. */
+  etat.nuitChoisie = true;
+  ecrireReglages(); peindreReglages();
   etat.grapheDe = null;
 });
 $('ma-position').addEventListener('click', async () => {

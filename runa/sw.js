@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.11.1';
+const VERSION = '1.12.0';
 const SHELL = 'runa-shell-' + VERSION;
 
 const FILES = [
@@ -38,6 +38,8 @@ const FILES = [
   './js/image.js',
   './lib/geo.js',
   './lib/texte.js',
+  './lib/soleil.js',
+  './lib/meteo.js',
   './lib/graph.js',
   './lib/route.js',
   './lib/loop.js',
@@ -66,8 +68,13 @@ const FILES = [
      dans une version périmée : l'app fabriquait sa requête avec l'ancien
      code après une mise à jour, sans que rien ne le signale.
 
-   On ne vise donc que ce qui part vers un serveur Overpass. */
-const HORS_COQUILLE = /^https?:\/\/[^/]*overpass[^/]*\//;
+   On ne vise donc que ce qui part vers un serveur Overpass.
+
+   La meteo est ecartee pour une autre raison : elle est FACULTATIVE et doit
+   echouer vite. La faire passer par la coquille ajouterait une recherche de
+   cache qui n'aboutira jamais, et hors ligne on veut que l'appel echoue
+   immediatement pour que l'ecran s'affiche sans attendre. */
+const HORS_COQUILLE = /^https?:\/\/[^/]*(overpass|open-meteo)[^/]*\//;
 
 self.addEventListener('install', e => {
   /* `cache: 'reload'` évite qu'addAll() remplisse un cache tout neuf avec

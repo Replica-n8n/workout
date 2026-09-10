@@ -35,6 +35,10 @@
       <button class="secondaire" id="ma-position">Ma position</button>
     </div>
 
+    <!-- La météo n'apparaît que si elle a été obtenue : hors ligne ou en
+         panne, cette ligne reste absente et rien d'autre ne change. -->
+    <p class="pied meteo" id="meteo" hidden></p>
+
     <button class="principal reprendre" id="reprendre" hidden></button>
 
     <button class="option" id="ouvrir-quartier" hidden>
@@ -68,7 +72,7 @@
     <button class="option" id="opt-nuit" aria-pressed="false">
       <span class="coche" aria-hidden="true">&check;</span>
       <span class="nom">Rues éclairées
-        <span class="sous">Pour courir de nuit</span></span>
+        <span class="sous" id="nuit-pourquoi">Pour courir de nuit</span></span>
     </button>
 
     <button class="principal" id="chercher">Trouver trois boucles</button>
