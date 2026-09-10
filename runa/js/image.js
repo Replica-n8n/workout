@@ -12,6 +12,7 @@
    ========================================================================= */
 
 import { nombre, plusProches } from '../lib/carrefour.js';
+import { minutesPour } from '../lib/geo.js';
 import { Place, placerLesRues } from '../lib/etiquettes.js';
 
 const COTE = 1080;
@@ -184,8 +185,8 @@ export function dessinerPartage(o) {
 
   const km = boucle.m / 1000;
   const grosse = restantM != null
-    ? `Il me reste ${nombre(restantM / 1000)} km, environ ${Math.round(restantM / 1000 * allure / 60)} min`
-    : `${nombre(km, 2)} km, environ ${Math.round(km * allure / 60)} min`;
+    ? `Il me reste ${nombre(restantM / 1000)} km, environ ${minutesPour(restantM, allure)} min`
+    : `${nombre(km, 2)} km, environ ${minutesPour(km * 1000, allure)} min`;
   const petite = restantM != null
     ? `boucle de ${nombre(km, 2)} km${position ? ' · position à ' + heure(position.quand) : ''}`
     : (position ? 'position à ' + heure(position.quand) : 'ma boucle du jour');

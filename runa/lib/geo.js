@@ -88,3 +88,15 @@ export function rayonDepart(distanceM) {
 export function distancePour(secondes, sParKm) {
   return (secondes / sParKm) * 1000;
 }
+
+/**
+ * Minutes qu'il faut pour `metres` à l'allure `sParKm`.
+ *
+ * ⚠️ La réciproque de `distancePour`, et elle vit ICI parce qu'elle était
+ * écrite trois fois : deux fois dans les cartes de `app.js`, une fois dans
+ * l'image de partage. Une règle écrite plusieurs fois finit par diverger, et
+ * ce projet en a déjà payé le prix avec le partage qui annonçait « 0 km ».
+ */
+export function minutesPour(metres, sParKm) {
+  return Math.round((metres / 1000) * (sParKm / 60));
+}

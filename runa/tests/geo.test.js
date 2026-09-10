@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { distanceM, capDeg, destination, bbox, longueurM, distancePour } from '../lib/geo.js';
+import { distanceM, capDeg, destination, bbox, longueurM, distancePour, minutesPour } from '../lib/geo.js';
 
 const PARIS = { lat: 48.8566, lon: 2.3522 };
 
@@ -51,4 +51,18 @@ test('longueurM : trois points alignés', () => {
 test('distancePour : 35 minutes à 6 min/km font 5,8 km', () => {
   const m = distancePour(35 * 60, 6 * 60);
   assert.ok(Math.abs(m - 5833) < 5, `obtenu ${m.toFixed(0)} m`);
+});
+
+test('minutesPour est bien la réciproque de distancePour', () => {
+  /* ⚠️ La formule était écrite trois fois : deux cartes et l'image de
+     partage. Trois copies finissent par diverger, et ce projet a déjà payé
+     ce prix avec un partage qui annonçait « 0 km ». */
+  assert.equal(minutesPour(5000, 360), 30);
+  assert.equal(minutesPour(0, 360), 0);
+  assert.equal(minutesPour(1000, 300), 5);
+  /* Aller-retour : ce qu'on parcourt en trente minutes se recourt en trente. */
+  for (const allure of [240, 300, 360, 420]) {
+    const m = distancePour(30 * 60, allure);
+    assert.equal(minutesPour(m, allure), 30, `à ${allure} s/km`);
+  }
 });

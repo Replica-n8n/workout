@@ -129,3 +129,38 @@ test('la mémoire ne vaut ni pour un autre lieu ni pour hier', async () => {
   /* Mais tout de suite et sur place, elle vaut. */
   assert.ok(enMemoire(lieu));
 });
+
+test('deux demandes simultanées ne font qu’un seul appel', async () => {
+  /* ⚠️ La mémoire ne s'écrit qu'à la réponse. L'écran de réglages se repeint
+     depuis onze endroits, dont chaque bouton de durée : sans partage de
+     l'appel en cours, enchaîner deux touchers lançait deux requêtes
+     parallèles vers un service gratuit, pour le même point. */
+  localStorage.clear();
+  const lieu = { lat: 45.52, lon: -73.58 };
+  let appels = 0;
+  const lent = () => {
+    appels++;
+    return new Promise(res => setTimeout(() => res({ ok: true,
+      json: () => Promise.resolve({ current: { temperature_2m: 7 } }) }), 40));
+  };
+  const [a, b, c] = await Promise.all([
+    meteo(lieu, { fetch: lent }), meteo(lieu, { fetch: lent }), meteo(lieu, { fetch: lent })]);
+  assert.equal(appels, 1, `${appels} appels pour trois demandes simultanées`);
+  assert.equal(a.tempC, 7);
+  assert.equal(b.tempC, 7);
+  assert.equal(c.tempC, 7);
+});
+
+test('un appel en vol n’empêche pas une demande ailleurs', async () => {
+  localStorage.clear();
+  let appels = 0;
+  const lent = () => {
+    appels++;
+    return new Promise(res => setTimeout(() => res({ ok: true,
+      json: () => Promise.resolve({ current: { temperature_2m: 7 } }) }), 30));
+  };
+  await Promise.all([
+    meteo({ lat: 45.52, lon: -73.58 }, { fetch: lent }),
+    meteo({ lat: 48.86, lon: 2.35 }, { fetch: lent })]);
+  assert.equal(appels, 2, 'deux villes différentes doivent faire deux appels');
+});

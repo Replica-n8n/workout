@@ -130,6 +130,9 @@ function garder(lieu, m) {
 
 /* ------------------------------------------------------------ l'appel */
 
+/* L'appel en cours, partagé par les demandes simultanées. */
+let enVol = null;
+
 /**
  * La météo au départ, ou `null`.
  *
@@ -146,22 +149,39 @@ export async function meteo(lieu, o = {}) {
   const dejaLa = enMemoire(lieu);
   if (dejaLa) return dejaLa;
 
+  /* ⚠️ La mémoire ne s'écrit qu'À LA RÉPONSE. Or l'écran de réglages se
+     repeint depuis onze endroits, dont chaque bouton de durée : sur un cache
+     froid, enchaîner deux touchers lançait deux requêtes en parallèle vers
+     un service gratuit, pour le même point. On partage donc l'appel en
+     cours. */
+  if (enVol && enVol.cle === cleDeLieu(lieu)) return enVol.promesse;
+
   const url = `${RACINE}?latitude=${lieu.lat.toFixed(4)}&longitude=${lieu.lon.toFixed(4)}`
             + '&current=temperature_2m,apparent_temperature,precipitation,'
             + 'wind_speed_10m,wind_direction_10m';
 
-  const arreter = new AbortController();
-  const minuteur = setTimeout(() => arreter.abort(), DELAI_MS);
-  try {
-    const f = o.fetch || fetch;
-    const rep = await f(url, { signal: arreter.signal });
-    if (!rep.ok) return null;
-    const m = lire(await rep.json());
-    if (m) garder(lieu, m);
-    return m;
-  } catch (e) {
-    return null;
-  } finally {
-    clearTimeout(minuteur);
-  }
+  const promesse = (async () => {
+    const arreter = new AbortController();
+    const minuteur = setTimeout(() => arreter.abort(), DELAI_MS);
+    try {
+      const f = o.fetch || fetch;
+      const rep = await f(url, { signal: arreter.signal });
+      if (!rep.ok) return null;
+      const m = lire(await rep.json());
+      if (m) garder(lieu, m);
+      return m;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(minuteur);
+      enVol = null;
+    }
+  })();
+  enVol = { cle: cleDeLieu(lieu), promesse };
+  return promesse;
+}
+
+/* Deux points à moins d'une centaine de mètres sont le même appel. */
+function cleDeLieu(lieu) {
+  return lieu.lat.toFixed(3) + ',' + lieu.lon.toFixed(3);
 }

@@ -6,7 +6,7 @@
    règle métier ici serait au mauvais endroit.
    ========================================================================= */
 
-import { bbox, distancePour } from '../lib/geo.js';
+import { bbox, distancePour, minutesPour } from '../lib/geo.js';
 import { construireGraphe, plusGrandeComposante } from '../lib/graph.js';
 import { genererBoucles } from '../lib/loop.js';
 import { accrocher, sensDeMarche, segmentSuivant, metresRestants, ECART_MAX_M } from '../lib/suivi.js';
@@ -42,7 +42,7 @@ const etat = {
   allure: 360,          // secondes par km
   eviterFeux: true,
   nuit: false,
-  nuitChoisie: false,   // vrai dès qu'elle a touché l'option elle-même
+  nuitChoisieLe: null,  // le jour où elle a touché l'option elle-même
   graphe: null,
   grapheDe: null,       // le départ pour lequel le graphe a été construit
   carrefours: [],       // les croisements nommés, pour dire où l'on est
@@ -83,7 +83,7 @@ function lireReglages() {
       allure: r.allure ?? 360,
       eviterFeux: r.eviterFeux ?? true,
       nuit: r.nuit ?? false,
-      nuitChoisie: r.nuitChoisie ?? false,
+      nuitChoisieLe: r.nuitChoisieLe ?? null,
       mode: r.mode === 'conquete' ? 'conquete' : 'decouverte'
     });
   } catch (e) { /* premier lancement, ou stockage refusé */ }
@@ -94,7 +94,7 @@ function ecrireReglages() {
     localStorage.setItem(CLE, JSON.stringify({
       depart: etat.depart, duree: etat.duree, allure: etat.allure,
       eviterFeux: etat.eviterFeux, nuit: etat.nuit,
-      nuitChoisie: etat.nuitChoisie, mode: etat.mode
+      nuitChoisieLe: etat.nuitChoisieLe, mode: etat.mode
     }));
   } catch (e) {}
 }
@@ -110,8 +110,19 @@ const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2
  *
  * @returns {boolean} vrai si la valeur a change, donc si le graphe est perime
  */
+/* Le jour courant, pour savoir si un choix manuel vaut encore. */
+function aujourdhui() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/** A-t-elle tranché elle-même, aujourd'hui ? */
+function choixDuJour() {
+  return etat.nuitChoisieLe === aujourdhui();
+}
+
 function calerLaNuit() {
-  if (etat.nuitChoisie || !etat.depart) return false;
+  if (choixDuJour() || !etat.depart) return false;
   const voulu = feraNuit(etat.depart, etat.duree);
   if (voulu === etat.nuit) return false;
   etat.nuit = voulu;
@@ -120,7 +131,9 @@ function calerLaNuit() {
 
 /** Pourquoi l'option est dans cet etat, en une ligne. */
 function phraseDeNuit() {
-  if (etat.nuitChoisie) return etat.nuit ? 'Choisi : rues eclairees' : 'Choisi : peu importe';
+  if (choixDuJour()) {
+    return etat.nuit ? 'Votre choix pour aujourd’hui' : 'Ignoré pour aujourd’hui';
+  }
   if (!etat.depart) return 'Pour courir de nuit';
   const reste = minutesDeJour(etat.depart);
   if (reste == null) return 'Pour courir de nuit';
@@ -590,8 +603,10 @@ async function chercher(nouvelleGraine) {
     }
 
     /* ⚠️ AVANT `assurerQuartier` : caler la nuit change les poids du graphe,
-       et le faire après laisserait chercher sur l'ancien. */
-    if (calerLaNuit()) etat.grapheDe = null;
+       et le faire après laisserait chercher sur l'ancien. Pas besoin
+       d'invalider `grapheDe` ici, la condition de réemploi compare déjà
+       `nuit` : l'écrire deux fois ferait diverger les deux règles. */
+    calerLaNuit();
     const cible = distancePour(etat.duree * 60, etat.allure);
     await assurerQuartier(cible);
 
@@ -884,10 +899,8 @@ function peindreFavoris() {
 
     const rue = (f.rues || []).find(r => !prises.has(r.nom)) || (f.rues || [])[0] || null;
     if (rue) prises.add(rue.nom);
-    const feux = f.feux == null ? ''
-               : f.feux === 0 ? '<b>aucun feu</b>'
-               : f.feux === 1 ? '<b>1 feu</b>' : `<b>${f.feux} feux</b>`;
-    const minutes = Math.round((f.m / 1000) * (etat.allure / 60));
+    const feux = phraseDesFeux(f.feux);
+    const minutes = minutesPour(f.m, etat.allure);
 
     el.innerHTML =
       `<button class="ouvrir" type="button">` +
@@ -1096,6 +1109,20 @@ function rueParRue(etapes) {
     .join(' <span class="fleche" aria-hidden="true">›</span> ');
 }
 
+/**
+ * Le compte de feux tel qu'il s'ecrit sur une carte.
+ *
+ * ⚠️ `null` n'est PAS zero : une boucle recue par lien ne transporte aucun
+ * compte, et annoncer « aucun feu » serait le mensonge exact corrige en
+ * 1.1.0. La phrase etait ecrite deux fois, ici et pour les parcours gardes.
+ */
+function phraseDesFeux(n) {
+  if (n == null) return '';
+  if (n === 0) return '<b>aucun feu</b>';
+  if (n === 1) return '<b>1 feu</b>';
+  return `<b>${n} feux</b>`;
+}
+
 function peindreCartes() {
   const zone = $('boucles');
   zone.innerHTML = '';
@@ -1106,14 +1133,11 @@ function peindreCartes() {
     el.type = 'button';
     el.setAttribute('aria-pressed', String(i === etat.choisie));
 
-    const minutes = Math.round((b.m / 1000) * (etat.allure / 60));
+    const minutes = minutesPour(b.m, etat.allure);
     // Une boucle reçue par lien n'a pas de compte de feux : on se tait
     // plutôt que d'inventer un chiffre.
     const sait = b.feux != null;
-    const feux = !sait ? ''
-               : b.feux === 0 ? '<b>aucun feu</b>'
-               : b.feux === 1 ? '<b>1 feu</b>'
-               : `<b>${b.feux} feux</b>`;
+    const feux = phraseDesFeux(b.feux);
     // L'éclairage n'est affiché que quand il apprend quelque chose : en mode
     // nocturne, ou quand une part notable du parcours n'est pas éclairée.
     // « 100 % éclairé » sur les trois cartes n'aide personne à choisir et
@@ -1310,10 +1334,14 @@ $('opt-feux').addEventListener('click', () => {
 });
 $('opt-nuit').addEventListener('click', () => {
   etat.nuit = !etat.nuit;
-  /* ⚠️ Un choix manuel doit tenir. Sans cette marque, la bascule automatique
-     reviendrait par-dessus au prochain écran, et l'option paraîtrait
-     ignorer les touchers. */
-  etat.nuitChoisie = true;
+  /* ⚠️ Un choix manuel doit tenir : sans cette marque, la bascule automatique
+     reviendrait par-dessus au prochain écran, et l'option paraîtrait ignorer
+     les touchers.
+
+     Mais il ne tient QUE POUR LA JOURNÉE. Une marque définitive éteignait la
+     bascule pour toujours, dès le premier toucher, et sans aucun moyen de la
+     rallumer : un réglage qu'on ne peut plus défaire n'est pas un réglage. */
+  etat.nuitChoisieLe = aujourdhui();
   ecrireReglages(); peindreReglages();
   etat.grapheDe = null;
 });
