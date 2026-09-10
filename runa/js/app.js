@@ -706,19 +706,38 @@ function ouvrirRecu(recu) {
   assurerQuartier(recu.m).catch(() => {}).finally(() => dire(null));
 }
 
+/* --------------------------------------------------------- les écrans */
+
+/**
+ * Le panneau ne montre qu'un écran à la fois.
+ *
+ * ⚠️ Cette liste et cette fonction sont le SEUL endroit qui décide de ce qui
+ * est visible. Avant, chaque bouton posait ses `hidden` à la main, en huit
+ * endroits, et trois d'entre eux oubliaient un écran. Le pire était
+ * atteignable : depuis « Mon quartier », déplacer son départ en touchant la
+ * carte affichait les réglages SANS refermer « Mon quartier ». Les deux
+ * écrans se superposaient, le pourcentage du quartier apparaissait sous les
+ * réglages, et plus aucun bouton ne remettait les choses d'aplomb.
+ *
+ * Ajouter un écran sans l'ajouter ici le rendrait invisible tout de suite,
+ * ce qui se voit ; l'oublier dans une transition ne se voyait pas.
+ */
+const ECRANS = ['reglages', 'resultats', 'monquartier', 'mesparcours'];
+
+function montrerEcran(nom) {
+  for (const id of ECRANS) $(id).hidden = id !== nom;
+}
+
 /* ------------------------------------------------------- mon quartier */
 
 function ouvrirQuartier() {
-  $('reglages').hidden = true;
-  $('resultats').hidden = true;
-  $('monquartier').hidden = false;
+  montrerEcran('monquartier');
   arreterSuivi();
   peindreQuartier();
 }
 
 function fermerQuartier() {
-  $('monquartier').hidden = true;
-  $('reglages').hidden = false;
+  montrerEcran('reglages');
   carte.quartier = false;
   carte.dessiner();
   peindreReglages();
@@ -763,16 +782,13 @@ function peindreQuartier() {
 /* ----------------------------------------------------- parcours gardés */
 
 function ouvrirFavoris() {
-  $('reglages').hidden = true;
-  $('resultats').hidden = true;
-  $('mesparcours').hidden = false;
+  montrerEcran('mesparcours');
   arreterSuivi();
   peindreFavoris();
 }
 
 function fermerFavoris() {
-  $('mesparcours').hidden = true;
-  $('reglages').hidden = false;
+  montrerEcran('reglages');
   peindreReglages();
 }
 
@@ -820,7 +836,7 @@ function peindreFavoris() {
    ni redemander au réseau. Les rues du quartier se redessinent depuis la
    mémoire si elles y sont, sinon le tracé seul suffit à courir. */
 function reprendre(f) {
-  $('mesparcours').hidden = true;
+  /* `ouvrirResultats` ferme tous les autres écrans, celui-ci compris. */
   etat.boucles = [{ ...f, noeuds: [], ways: new Set(f.ways || []) }];
   etat.choisie = 0;
   etat.enCourse = true;
@@ -944,9 +960,7 @@ function montrerResultats(cible) {
 /* Séparé de `montrerResultats` parce que le parcours restauré au lancement
    passe par ici sans avoir ni cible ni durée de calcul à afficher. */
 function ouvrirResultats() {
-  $('reglages').hidden = true;
-  $('monquartier').hidden = true;
-  $('resultats').hidden = false;
+  montrerEcran('resultats');
   carte.quartier = false;
   peindreOnglets();
   peindreMode();
@@ -1213,7 +1227,7 @@ $('ma-position').addEventListener('click', async () => {
     // zone chargée, le graphe lui-même.
     const bouge = !avant ||
       Math.abs(avant.lat - etat.depart.lat) > 1e-5 || Math.abs(avant.lon - etat.depart.lon) > 1e-5;
-    if (bouge) { etat.boucles = []; etat.choisie = 0; $('resultats').hidden = true; $('reglages').hidden = false; }
+    if (bouge) { etat.boucles = []; etat.choisie = 0; montrerEcran('reglages'); }
     carte.montrer(null, etat.depart);
     if (etat.depart.precision > 50) {
       direUnMoment(`Position trouvée, mais à ${Math.round(etat.depart.precision)} m près seulement.`);
@@ -1232,9 +1246,7 @@ $('ma-position').addEventListener('click', async () => {
 $('chercher').addEventListener('click', () => chercher(false));
 $('autres').addEventListener('click', () => chercher(true));
 $('retour').addEventListener('click', () => {
-  $('resultats').hidden = true;
-  $('monquartier').hidden = true;
-  $('reglages').hidden = false;
+  montrerEcran('reglages');
   // Repeindre : sans ça l'indigo de « Mon quartier » reste à l'écran jusqu'au
   // prochain dessin, et on croit que la carte a changé de couleur.
   carte.quartier = false;
@@ -1333,8 +1345,7 @@ $('quitter').addEventListener('click', () => {
     // se lit comme un bug de la carte alors que c'est un tracé périmé.
     etat.boucles = [];
     etat.choisie = 0;
-    $('resultats').hidden = true;
-    $('reglages').hidden = false;
+    montrerEcran('reglages');
     carte.montrer(null, etat.depart);
     direUnMoment('Départ déplacé.');
   });
