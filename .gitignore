@@ -7,3 +7,6 @@ Thumbs.db
 
 # Les maquettes pesent 8 Mo : livrees en fichier, pas versionnees.
 runa/maquettes/
+
+# La carte graphify du code : generee, locale, et surtout pas publiee par Pages.
+runa/graphify-out/
