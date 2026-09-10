@@ -64,11 +64,56 @@ test('un parcours simple, fermé, à la bonne distance et en peu d’étapes', (
   assert.equal(b.noeuds[0], b.noeuds.at(-1), 'le parcours ne revient pas au départ');
   const ecart = Math.abs(b.m - 3000) / 3000;
   assert.ok(ecart <= 0.12, `${b.m} m, soit ${(ecart * 100).toFixed(1)} % d’écart`);
-  assert.ok(b.etapes.length <= 5, `${b.etapes.length} étapes, c’est trop`);
+  assert.ok(b.etapes.length <= 6, `${b.etapes.length} étapes, c’est trop`);
   assert.ok(b.etapes.length >= 3, `${b.etapes.length} étape(s), ce n’est pas un circuit`);
-  for (const e of b.etapes) {
-    assert.ok(e.m >= 250, `étape de ${e.m} m, sous le minimum`);
-    assert.equal(typeof e.nom, 'string');
+
+  /* ⚠️ Le minimum de 250 m ne vaut que pour les étapes DU MILIEU. La
+     première et la dernière sont les deux moitiés d'une même rue, coupée au
+     point où l'on rejoint la boucle : on part rarement pile à un coin, et
+     exiger 250 m de chaque moitié interdirait de partir de chez soi. */
+  for (const e of b.etapes) assert.equal(typeof e.nom, 'string');
+  for (const e of b.etapes.slice(1, -1)) {
+    assert.ok(e.m >= 250, `étape intermédiaire de ${e.m} m, sous le minimum`);
+  }
+  const premiere = b.etapes[0], derniere = b.etapes.at(-1);
+  if (premiere.nom === derniere.nom) {
+    assert.ok(premiere.m + derniere.m >= 250,
+      `la rue de départ ne totalise que ${premiere.m + derniere.m} m`);
+  }
+});
+
+test('une boucle courte se répète au lieu d’être écartée', () => {
+  /* Sur un damier serré, aucun cycle de trois ou quatre rues ne fait 5 km :
+     le plus grand tour possible est bien plus court. Plutôt que de ne rien
+     rendre, on doit proposer plusieurs tours. */
+  const d = damier({ cotes: 15, pasM: 100 });
+  const g = plusGrandeComposante(construireGraphe(d.osm, {}));
+  const b = parcoursSimple(g, { depart: d.centre, distanceCible: 4000 });
+
+  assert.ok(b, 'aucun parcours là où des tours suffiraient');
+  assert.ok(b.tours >= 1, 'le nombre de tours doit être connu');
+  const ecart = Math.abs(b.m - 4000) / 4000;
+  assert.ok(ecart <= 0.12, `${b.m} m pour 4000 demandés`);
+  if (b.tours > 1) {
+    assert.ok(Math.abs(b.tourM * b.tours + b.approcheM * 2 - b.m) <= 5,
+      `${b.tours} tours de ${b.tourM} m plus ${b.approcheM} m d’amorce ne font pas ${b.m} m`);
+  }
+});
+
+test('les feux se comptent à chaque tour, pas une seule fois', () => {
+  /* Un compteur de nœuds distincts annoncerait dix feux pour une sortie de
+     trois tours qui en compte trente. C'est le chiffre sur lequel le coureur
+     choisit : il doit dire ce qu'il va subir. */
+  const feux = [];
+  for (let c = 0; c < 15; c++) feux.push(7 * 1000 + c + 1);
+  const d = damier({ cotes: 15, pasM: 100, feux });
+  const g = plusGrandeComposante(construireGraphe(d.osm, {}));
+  const b = parcoursSimple(g, { depart: d.centre, distanceCible: 4000 });
+  assert.ok(b);
+  const surUnTour = new Set(b.noeuds.filter(n => g.feux.has(n))).size;
+  if (b.tours > 1 && surUnTour > 0) {
+    assert.ok(b.feux >= surUnTour * b.tours * 0.9,
+      `${b.feux} feux annoncés pour ${surUnTour} par tour sur ${b.tours} tours`);
   }
 });
 
@@ -112,9 +157,19 @@ test('les feux sont comptés sur le trajet réellement emprunté', () => {
   const { d, g } = quartier({ feux });
   const b = parcoursSimple(g, { depart: d.centre, distanceCible: 3000 });
   assert.ok(b);
-  const attendus = new Set(b.noeuds.filter(n => g.feux.has(n)));
-  assert.equal(b.feux, attendus.size,
-    `${b.feux} feux annoncés pour ${attendus.size} nœuds allumés traversés`);
+  const distincts = new Set(b.noeuds.filter(n => g.feux.has(n))).size;
+
+  /* ⚠️ Le compte annoncé n'est PAS le nombre de nœuds distincts : sur trois
+     tours on s'arrête trois fois au même feu, et c'est bien ce que le coureur
+     subit. Il ne peut donc qu'être supérieur ou égal. */
+  assert.ok(b.feux >= distincts,
+    `${b.feux} feux annoncés, moins que les ${distincts} feux distincts du tracé`);
+
+  /* Un seul tour et pas d'amorce : là, les deux doivent coïncider. */
+  if (b.tours === 1 && b.approcheM === 0) {
+    assert.equal(b.feux, distincts,
+      `${b.feux} feux pour ${distincts} traversés sur un tour unique`);
+  }
 });
 
 test('rien à proposer là où il n’y a pas de rues qui se croisent', () => {

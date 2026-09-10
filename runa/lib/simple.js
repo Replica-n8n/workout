@@ -261,37 +261,60 @@ function aPied(graphe, corridor, de, vers) {
 
 /* ---------------------------------------------------------- l'assemblage */
 
+/* Jusqu'où l'on accepte de marcher pour rejoindre la boucle.
+   ⚠️ Exiger que la boucle passe DEVANT CHEZ SOI était ma contrainte, pas
+   celle de la ville. Mesuré à la Croix-Rousse : 24 cycles existent, 14 sont
+   rejetés parce que le départ n'est pas dessus. Une amorce de quelques
+   centaines de mètres les débloque, au prix d'une étape en plus. */
+const APPROCHE_MAX_M = 700;
+
+/* En deçà, on considère qu'on est déjà sur la boucle et il n'y a pas
+   d'amorce à annoncer. C'est la largeur d'un pâté de maisons. */
+const SUR_LA_BOUCLE_M = 60;
+
+/* Au-delà, « sept tours » n'est plus un parcours de quartier, c'est une
+   piste d'athlétisme, et personne n'a demandé ça. */
+const MAX_TOURS = 5;
+
+/* Part maximale de la sortie que l'aller-retour vers la boucle peut manger. */
+const PART_AMORCE_MAX = 0.30;
+
 /**
  * Un parcours en quelques rues, ou `null` si le quartier n'en porte pas.
  *
- * Rendre `null` est un résultat, pas un échec à rattraper : la Croix-Rousse
- * n'a pas de rectangle de rues longues et droites, et lui en inventer un
- * mauvais serait pire que de ne rien proposer.
+ * Trois formes possibles, de la plus simple à la plus contrainte :
+ *   1. la boucle passe devant chez vous et fait la bonne distance ;
+ *   2. elle passe devant chez vous mais elle est courte : on la répète ;
+ *   3. elle est à côté : on la rejoint, on la fait, on rentre.
+ *
+ * ⚠️ Rendre `null` est un RÉSULTAT, pas un échec à rattraper. Certains
+ * quartiers n'ont pas de rues longues qui se croisent, et leur inventer un
+ * mauvais parcours serait pire que se taire.
  *
  * @param {object} graphe
  * @param {object} o
  * @param {{lat:number,lon:number}} o.depart
  * @param {number} o.distanceCible  en mètres
  * @param {number} [o.rayonM]       où chercher les corridors
- * @returns {object|null} même forme qu'une boucle ordinaire, plus `.etapes`
+ * @returns {object|null} même forme qu'une boucle ordinaire, plus `.etapes`,
+ *   `.tours` et `.approcheM`
  */
 export function parcoursSimple(graphe, o) {
   const centre = o.depart;
   const cible = o.distanceCible;
-  /* Le tour d'un rectangle vaut quatre côtés : chercher les corridors à un
-     quart de la cible, avec de la marge pour les circuits allongés. */
   const rayon = o.rayonM ?? Math.max(600, Math.min(2500, cible * 0.35));
 
   const cors = corridors(graphe, centre, rayon);
   if (cors.length < 3) return null;
 
   const kx = R * RAD * Math.cos(centre.lat * RAD), ky = R * RAD;
+  const loin = id => {
+    const n = graphe.noeuds.get(id);
+    return n ? Math.hypot((n.lon - centre.lon) * kx, (n.lat - centre.lat) * ky) : Infinity;
+  };
 
-  /* Un croisement par paire de corridors.
-     ⚠️ Par le NŒUD, pas par la paire. Comparer les corridors deux à deux
-     coûtait mille huit cents intersections d'ensembles ; ici on passe une
-     fois sur les nœuds, et un nœud partagé par deux corridors EST leur
-     croisement, par définition. */
+  /* Un croisement par paire de corridors, trouvé par le NŒUD et non par la
+     paire : un nœud partagé par deux corridors EST leur croisement. */
   const croise = new Map();
   const voisins = cors.map(() => []);
   const parNoeud = new Map();
@@ -316,33 +339,22 @@ export function parcoursSimple(graphe, o) {
   }
   const croisement = (a, b) => croise.get(a + ':' + b);
 
-  /* Les corridors qui passent devant chez soi. Sans cela il faudrait une
-     amorce pour rejoindre le rectangle, et cette amorce est justement le
-     genre de détour qu'on ne retient pas. */
-  const departs = [];
+  /* Les corridors assez proches pour qu'un cycle qui les contient soit
+     rejoignable. Sans cette borne l'énumération partirait explorer tout le
+     quartier téléchargé. */
+  const proches = [];
   for (let i = 0; i < cors.length; i++) {
-    let s = null, d0 = Infinity;
-    for (const id of cors[i].noeuds) {
-      const n = graphe.noeuds.get(id);
-      if (!n) continue;
-      const d = Math.hypot((n.lon - centre.lon) * kx, (n.lat - centre.lat) * ky);
-      if (d < d0) { d0 = d; s = id; }
-    }
-    if (s != null && d0 <= 250) departs.push({ i, s });
+    let d0 = Infinity;
+    for (const id of cors[i].noeuds) { const d = loin(id); if (d < d0) d0 = d; }
+    if (d0 <= APPROCHE_MAX_M) proches.push(i);
   }
-  if (!departs.length) return null;
-
-  /* --- les circuits, mesurés d'abord le long des chaussées, ce qui est
-     rapide et suffit à écarter ceux qui n'ont pas la bonne longueur --- */
-  const bruts = [];
-  const vus = new Set();
+  if (!proches.length) return null;
 
   /* ⚠️ Sans cette mémoire, `leLong` refaisait le même Dijkstra des milliers
-     de fois : l'énumération essaie toutes les chaînes de corridors, et
-     toutes celles qui commencent pareil partagent leurs premières étapes.
-     C'était l'essentiel du temps de calcul, dix-sept secondes pour 8 km sur
-     le Plateau. Ce n'était NI la détection des corridors NI A*, contrairement
-     à ce que j'avais supposé les deux premières fois. */
+     de fois : toutes les chaînes qui commencent pareil partagent leurs
+     premières étapes. C'était l'essentiel du temps de calcul, dix-sept
+     secondes pour 8 km sur le Plateau. Ce n'était NI la détection des
+     corridors NI A*, contrairement à ce que j'avais supposé deux fois. */
   const enMemoire = new Map();
   const troncon = (i, de, vers) => {
     const cle = i + ':' + de + ':' + vers;
@@ -351,84 +363,257 @@ export function parcoursSimple(graphe, o) {
     enMemoire.set(cle, p);
     return p;
   };
-  const essayer = (chaine, s, iA) => {
-    const etapes = [];
-    let total = 0;
-    for (let k = 0; k < chaine.length; k++) {
-      const cor = cors[chaine[k]];
-      const de = k === 0 ? s : croisement(chaine[k - 1], chaine[k]);
-      const vers = croisement(chaine[k], k + 1 < chaine.length ? chaine[k + 1] : iA);
-      if (de == null || vers == null) return;
-      const p = troncon(chaine[k], de, vers);
-      if (!p || p.m < MINI_TRONCON_M) return;
-      etapes.push({ i: chaine[k], nom: cor.nom, de, vers, m: p.m, noeuds: p.noeuds });
-      total += p.m;
-    }
-    const dernier = croisement(chaine[chaine.length - 1], iA);
-    const retour = troncon(iA, dernier, s);
-    if (!retour || retour.m < MINI_TRONCON_M) return;
 
-    /* ⚠️ La rue de départ sert DEUX FOIS, à l'aller et au retour. Le premier
-       prototype l'interdisait, et aucun circuit ne pouvait alors se refermer.
-       Ce qu'il faut vérifier n'est pas qu'elle serve une seule fois, mais que
-       les deux tronçons ne se chevauchent pas : un seul nœud commun, le
-       départ. Sinon on rentre par où l'on est parti. */
-    const aller = new Set(etapes[0].noeuds);
-    if (retour.noeuds.filter(n => aller.has(n)).length !== 1) return;
+  /* --- les cycles fermés, mesurés le long des chaussées d'abord --- */
+  const bruts = [];
+  const vus = new Set();
 
-    etapes.push({ i: iA, nom: cors[iA].nom, de: dernier, vers: s, m: retour.m, noeuds: retour.noeuds });
-    total += retour.m;
-    if (Math.abs(total - cible) > cible * TOL) return;
-
-    const cle = etapes.map(e => e.i).join('>');
+  const essayer = chaine => {
+    const cle = chaine.join('>');
     if (vus.has(cle)) return;
     vus.add(cle);
-    bruts.push({ total, etapes });
+
+    const legs = [];
+    let total = 0;
+    for (let k = 0; k < chaine.length; k++) {
+      const avant = chaine[(k - 1 + chaine.length) % chaine.length];
+      const apres = chaine[(k + 1) % chaine.length];
+      const de = croisement(avant, chaine[k]);
+      const vers = croisement(chaine[k], apres);
+      if (de == null || vers == null || de === vers) return;
+      const p = troncon(chaine[k], de, vers);
+      if (!p || p.m < MINI_TRONCON_M) return;
+      legs.push({ i: chaine[k], nom: cors[chaine[k]].nom, m: p.m, noeuds: p.noeuds });
+      total += p.m;
+    }
+
+    /* Un cycle dégénéré revient sur ses pas. Chaque nœud n'appartient qu'à
+       une étape, sauf les croisements, partagés par deux. */
+    const compte = new Map();
+    for (const l of legs) for (const n of l.noeuds) compte.set(n, (compte.get(n) || 0) + 1);
+    for (const [, c] of compte) if (c > 2) return;
+
+    /* Où l'on accroche la boucle : son point le plus proche de chez soi. */
+    let accroche = null, d0 = Infinity, legAccroche = 0;
+    legs.forEach((l, k) => {
+      for (const n of l.noeuds) {
+        const d = loin(n);
+        if (d < d0) { d0 = d; accroche = n; legAccroche = k; }
+      }
+    });
+    if (accroche == null || d0 > APPROCHE_MAX_M) return;
+
+    /* ⚠️ Un PRÉ-tri, pas une mesure. Compté sur l'axe de la chaussée, ce
+       chiffre vaut le double du vrai (101 contre 49) : il ne sert qu'à
+       choisir lesquels valent la peine d'être refaits à pied, puisque le
+       vrai compte n'existe qu'après. Sans lui, les vingt candidats retenus
+       étaient les plus proches de la distance voulue, pas les moins
+       allumés, et Villeray remontait de 31 à 42 feux. */
+    let feuxBruts = 0;
+    const dejaVus = new Set();
+    for (const l of legs) {
+      for (const nd of l.noeuds) {
+        if (graphe.feux.has(nd) && !dejaVus.has(nd)) { feuxBruts++; dejaVus.add(nd); }
+      }
+    }
+    bruts.push({ legs, total, accroche, d0, legAccroche, feuxBruts });
   };
 
-  for (const { i: iA, s } of departs) {
+  for (const iA of proches) {
     for (const iB of voisins[iA]) {
       for (const iC of voisins[iB]) {
         if (iC === iA || iC === iB) continue;
-        if (croisement(iC, iA) != null) essayer([iA, iB, iC], s, iA);
+        if (croisement(iC, iA) != null) essayer([iA, iB, iC]);
         for (const iD of voisins[iC]) {
           if (iD === iA || iD === iB || iD === iC) continue;
-          if (croisement(iD, iA) != null) essayer([iA, iB, iC, iD], s, iA);
+          if (croisement(iD, iA) != null) essayer([iA, iB, iC, iD]);
         }
       }
     }
   }
   if (!bruts.length) return null;
 
-  /* --- puis à pied, pour de vrai, sur les plus proches de la cible --- */
-  bruts.sort((a, b) => Math.abs(a.total - cible) - Math.abs(b.total - cible));
+  /* --- combien de tours, et quelle amorce, pour tomber sur la cible --- */
+  let depart = null, dDepart = Infinity;
+  for (const [id] of graphe.voisins) {
+    const d = loin(id);
+    if (d < dDepart) { dDepart = d; depart = id; }
+  }
+  if (depart == null) return null;
 
-  let meilleur = null;
-  for (const brut of bruts.slice(0, MAX_ROUTES)) {
-    const ids = [];
-    const etapes = [];
-    let metres = 0, casse = false;
-    for (const e of brut.etapes) {
-      const p = aPied(graphe, cors[e.i], e.de, e.vers);
-      if (!p) { casse = true; break; }
-      metres += p.m;
-      for (const n of p.noeuds) if (ids[ids.length - 1] !== n) ids.push(n);
-      etapes.push({ nom: e.nom, m: Math.round(p.m) });
+  const candidats = [];
+  for (const b of bruts) {
+    const surPlace = b.d0 <= SUR_LA_BOUCLE_M;
+    /* L'amorce se fait deux fois, à l'aller et au retour. Estimée à vol
+       d'oiseau ici, mesurée pour de vrai plus bas.
+
+       ⚠️ Et ÉCARTÉE ici si elle dépasse déjà le plafond. `d0` est une borne
+       basse : par la rue ce sera plus long, jamais moins. Sans ce filtre, le
+       tri par feux remontait vingt boucles sans un seul feu mais toutes à
+       plus de six cents mètres, toutes rejetées ensuite pour cette raison,
+       et l'app ne proposait plus rien du tout. */
+    const amorce = surPlace ? 0 : b.d0 * 2;
+    if (amorce > cible * PART_AMORCE_MAX) continue;
+    /* ⚠️ On ne FIXE pas le nombre de tours ici : la longueur le long des
+       chaussées n'est qu'une estimation, et le trajet à pied en diffère
+       assez pour faire sortir de la fourchette un circuit parfaitement bon.
+       Paris à 3 km disparaissait comme ça. On vérifie seulement qu'UN
+       nombre de tours pourrait convenir, et on tranche après la mesure. */
+    let possible = false, estime = Infinity;
+    for (let tours = 1; tours <= MAX_TOURS; tours++) {
+      const t = b.total * tours + amorce;
+      if (Math.abs(t - cible) < Math.abs(estime - cible)) estime = t;
+      if (Math.abs(t - cible) <= cible * TOL * 1.5) possible = true;
     }
-    if (casse || ids.length < 4) continue;
-    if (Math.abs(metres - cible) > cible * TOL) continue;
+    if (possible) candidats.push({ ...b, surPlace, estime, cible, tol: TOL });
+  }
+  if (!candidats.length) return null;
 
-    let feux = 0;
-    const dejaVus = new Set();
-    for (const n of ids) if (graphe.feux.has(n) && !dejaVus.has(n)) { feux++; dejaVus.add(n); }
-    /* Le moins allumé gagne : c'est le seul axe sur lequel ce parcours est
-       en retard sur les boucles ordinaires, donc le seul qui vaille un tri. */
-    if (!meilleur || feux < meilleur.feux) meilleur = { ids, metres, etapes, feux };
+  /* Le moins de tours d'abord, puis le plus proche de la distance demandee.
+     ⚠️ NE PAS trier sur la proximité du départ : les rues qui passent devant
+     chez soi sont les grands axes, et les préférer faisait remonter le
+     Plateau de 28 à 37 feux. C'est le tri par feux, plus bas, qui décide. */
+  /* ⚠️ Trier D'ABORD sur les feux remplissait les vingt places de circuits
+     peu allumés dont aucun ne tombait sur la bonne distance, et l'app ne
+     proposait plus rien. La distance passe donc en premier, mais seulement
+     comme un OUI ou NON : parmi ceux qui tiennent la demande, c'est bien le
+     moins allumé qui gagne. */
+  const tient = x => Math.abs(x.estime - cible) <= cible * TOL ? 0 : 1;
+  candidats.sort((a, b) => tient(a) - tient(b) ||
+                           a.feuxBruts - b.feuxBruts ||
+                           Math.abs(a.estime - cible) - Math.abs(b.estime - cible));
+
+  /* --- puis à pied, pour de vrai --- */
+  let meilleur = null;
+  for (const c of candidats.slice(0, MAX_ROUTES)) {
+    const fait = aPiedLeCircuit(graphe, cors, c, depart, cible);
+    if (!fait) continue;
+    /* Le moins allumé gagne : c'est le seul axe sur lequel ce parcours est en
+       retard sur les boucles ordinaires, donc le seul qui vaille un tri. */
+    if (!meilleur || fait.feux < meilleur.feux ||
+        (fait.feux === meilleur.feux && fait.tours < meilleur.tours)) meilleur = fait;
   }
   if (!meilleur) return null;
 
-  const b = mesurer(graphe, meilleur.ids, meilleur.metres,
+  const b = mesurer(graphe, meilleur.ids, meilleur.m,
                     waysDuChemin(graphe, meilleur.ids), centre);
   b.etapes = meilleur.etapes;
+  b.tours = meilleur.tours;
+  b.tourM = Math.round(meilleur.tourM);
+  b.approcheM = Math.round(meilleur.approcheM);
+  /* ⚠️ `mesurer` compte les nœuds DISTINCTS : sur trois tours il ne verrait
+     les feux qu'une fois, alors qu'on s'y arrête à chaque passage. La carte
+     annoncerait dix feux pour une sortie qui en compte trente. */
+  b.feux = meilleur.feux;
   return b;
+}
+
+/**
+ * Le circuit refait sur le vrai réseau piéton, tours et amorce compris.
+ *
+ * On tourne les étapes pour partir du point d'accroche, et l'on coupe en deux
+ * celle qui le contient : c'est ce qui donne « Rachel jusqu'à
+ * Saint-Dominique [...] et Rachel ramène ».
+ */
+function aPiedLeCircuit(graphe, cors, c, depart, cible) {
+  const ordre = [];
+  for (let k = 0; k < c.legs.length; k++) ordre.push(c.legs[(c.legAccroche + k) % c.legs.length]);
+
+  /* L'étape d'accroche, coupée au point où l'on rejoint la boucle. */
+  const tete = ordre[0];
+  const i = tete.noeuds.indexOf(c.accroche);
+  if (i < 0) return null;
+  const debut = { i: tete.i, nom: tete.nom, de: c.accroche, vers: tete.noeuds[tete.noeuds.length - 1] };
+  const fin = { i: tete.i, nom: tete.nom, de: tete.noeuds[0], vers: c.accroche };
+
+  const morceaux = [debut];
+  for (let k = 1; k < ordre.length; k++) {
+    morceaux.push({ i: ordre[k].i, nom: ordre[k].nom,
+                    de: ordre[k].noeuds[0], vers: ordre[k].noeuds[ordre[k].noeuds.length - 1] });
+  }
+  morceaux.push(fin);
+
+  const tour = [];
+  const etapes = [];
+  let tourM = 0;
+  for (const m of morceaux) {
+    if (m.de === m.vers) continue;   // l'accroche tombe pile sur un croisement
+    const p = aPied(graphe, cors[m.i], m.de, m.vers);
+    if (!p) return null;
+    tourM += p.m;
+    etapes.push({ nom: m.nom, m: Math.round(p.m) });
+    for (const n of p.noeuds) if (tour[tour.length - 1] !== n) tour.push(n);
+  }
+  if (tour.length < 4 || !tourM) return null;
+
+  /* L'amorce, mesurée cette fois. Elle n'a pas à longer quoi que ce soit :
+     c'est le chemin le plus agréable pour rejoindre la boucle, et le routeur
+     sait déjà éviter les feux et les grands axes. */
+  let amorce = null;
+  if (!c.surPlace) {
+    amorce = chemin(graphe, depart, c.accroche);
+    if (!amorce) return null;
+    /* ⚠️ L'amorce se fait DEUX FOIS. Sans ce plafond, une sortie de 3,2 km
+       mettait 1,5 km en aller-retour pour rejoindre la boucle : ce n'est
+       plus une boucle, c'est un trajet avec un détour au milieu. */
+    if (amorce.m * 2 > c.cible * PART_AMORCE_MAX) return null;
+  }
+
+  /* Maintenant seulement, avec la vraie longueur d'un tour : combien ?
+     ⚠️ Essayer le SEUL arrondi ne suffit pas. Quand il tombe juste hors de
+     la fourchette, son voisin y est souvent, et jeter le circuit pour si peu
+     faisait disparaître Paris à 5 km et le damier de test. On regarde donc
+     les deux, et l'on garde le plus proche de la demande. */
+  const aller = amorce ? amorce.m * 2 : 0;
+  const vise = (cible - aller) / tourM;
+  let tours = 0, m = 0, ecart = Infinity;
+  for (const t of [Math.floor(vise), Math.ceil(vise)]) {
+    if (t < 1 || t > MAX_TOURS) continue;
+    const total = tourM * t + aller;
+    const e = Math.abs(total - cible);
+    if (e < ecart) { ecart = e; tours = t; m = total; }
+  }
+  if (!tours || ecart > cible * TOL) return null;
+
+  const ids = [];
+  const pousser = suite => { for (const n of suite) if (ids[ids.length - 1] !== n) ids.push(n); };
+  if (amorce) pousser(amorce.noeuds);
+  /* Les tours sont répétés dans le tracé, et non comptés à part : l'écran de
+     course suit ce tracé pour dire ce qu'il reste, et un tracé d'un seul tour
+     annoncerait l'arrivée au tiers du parcours. */
+  for (let t = 0; t < tours; t++) pousser(tour);
+  if (amorce) pousser([...amorce.noeuds].reverse());
+
+  /* Les feux se comptent à CHAQUE passage : c'est ce que le coureur subit. */
+  const unTour = new Set();
+  for (const n of tour) if (graphe.feux.has(n)) unTour.add(n);
+  let feux = unTour.size * tours;
+  if (amorce) {
+    const surAmorce = new Set();
+    for (const n of amorce.noeuds) if (graphe.feux.has(n) && !unTour.has(n)) surAmorce.add(n);
+    feux += surAmorce.size * 2;
+  }
+
+  const sortie = { ids, m, feux, tours, tourM, approcheM: amorce ? amorce.m : 0, etapes };
+  if (amorce) {
+    /* L'amorce est une étape comme les autres : elle se retient aussi. */
+    const nom = nomDuNoeud(graphe, c.accroche) || etapes[0].nom;
+    /* Annoncer « rejoindre Chemin Vert » puis « Chemin Vert » ferait lire deux
+       fois la même rue : on fond l'amorce dans la première étape. */
+    if (nom === etapes[0].nom) {
+      sortie.etapes = etapes.map((e, i) => i ? e : { ...e, m: e.m + Math.round(amorce.m) });
+    } else {
+      sortie.etapes = [{ nom, m: Math.round(amorce.m), approche: true }, ...etapes];
+    }
+  }
+  return sortie;
+}
+
+/** Le nom de la rue qui passe par un nœud, pour annoncer où l'on va. */
+function nomDuNoeud(graphe, id) {
+  for (const a of graphe.voisins.get(id) || []) {
+    const t = graphe.ways.get(a.way);
+    if (t && t.name) return t.name;
+  }
+  return null;
 }

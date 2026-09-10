@@ -16,7 +16,7 @@ import { Carte } from './carte.js';
 import * as favoris from './favoris.js';
 import * as plateau from './plateau.js';
 import { encoder, decoder } from '../lib/partage.js';
-import { indexerCarrefours, carrefourProche, reperes, abreger } from '../lib/carrefour.js';
+import { indexerCarrefours, carrefourProche, reperes, abreger, nombre } from '../lib/carrefour.js';
 import { dessinerPartage } from './image.js';
 import { classer, Territoire } from '../lib/score.js';
 import { echapper } from '../lib/texte.js';
@@ -1003,6 +1003,24 @@ function peindreGarder() {
   bouton.textContent = deja ? 'Gardé' : 'Garder';
 }
 
+/**
+ * Les rues d'un parcours a retenir, mises bout a bout.
+ *
+ * L'amorce porte une fleche : « rejoindre Gounod, PUIS la boucle » n'est pas
+ * la meme chose que la boucle elle-meme, et le coureur doit voir ou elle
+ * commence. La derniere etape n'est ecrite que si c'est une AUTRE rue que la
+ * premiere : le plus souvent c'est celle du depart qui ramene, et la relire
+ * ne dit rien de neuf.
+ */
+function rueParRue(etapes) {
+  const suite = etapes.length > 1 && etapes[0].nom === etapes[etapes.length - 1].nom
+    ? etapes.slice(0, -1) : etapes;
+  return suite
+    .map(e => (e.approche ? '<span class="vers" aria-hidden="true">→</span> ' : '') +
+              `<b>${echapper(abreger(e.nom))}</b>`)
+    .join(' <span class="fleche" aria-hidden="true">›</span> ');
+}
+
 function peindreCartes() {
   const zone = $('boucles');
   zone.innerHTML = '';
@@ -1046,10 +1064,10 @@ function peindreCartes() {
        Abrégé, pas « nommé » : quatre noms complets avec leur article et leur
        type de voie font quatre lignes en 360 px de large. Et c'est ainsi
        qu'on se donne rendez-vous, « au coin de Rachel et Saint-Dominique ». */
-    const chaine = b.etapes
-      ? b.etapes.slice(0, -1).map(e => `<b>${echapper(abreger(e.nom))}</b>`)
-          .join(' <span class="fleche" aria-hidden="true">›</span> ')
-      : null;
+    /* La dernière étape n'est écrite que si c'est une AUTRE rue que la
+       première : le plus souvent c'est la rue du départ qui ramène, et la
+       relire ne dit rien de neuf. */
+    const chaine = b.etapes ? rueParRue(b.etapes) : null;
     const par = chaine ? chaine : (rue ? `par ${nommer(rue.nom)}` : '');
 
     /* Le critère qui manquait pour trancher entre trois boucles de même
@@ -1059,15 +1077,21 @@ function peindreCartes() {
     const score = b.score == null ? '' : `<span class="score">${b.score}</span>`;
 
     const marque = b.etapes ? '<span class="marque">À retenir</span>' : '';
+    /* ⚠️ Les tours doivent se lire AVANT de choisir. Quatre tours d'un
+       kilomètre et une boucle unique de quatre kilomètres ne sont pas la même
+       sortie, et l'un des deux se retient sans rien regarder. */
+    const tours = b.tours > 1
+      ? `<span class="tours">${b.tours} tours de ${nombre(b.tourM / 1000, 2)} km</span>` : '';
     el.innerHTML =
       `<span class="km">${(b.m / 1000).toFixed(2)} km${marque}</span>` +
-      `<span class="detail">${par}<br>${feux}${feux ? ' · ' : ''}${minutes} min${eclaire}${score}</span>` +
+      `<span class="detail">${par}<br>${feux}${feux ? ' · ' : ''}${minutes} min${eclaire}${tours}${score}</span>` +
       `<span class="puce" aria-hidden="true"></span>`;
     el.setAttribute('aria-label',
       (b.etapes ? 'Parcours à retenir, ' : '') +
       `Boucle de ${(b.m / 1000).toFixed(2)} kilomètres` +
-      (b.etapes ? `, par ${b.etapes.slice(0, -1).map(e => nommerBrut(e.nom)).join(', puis ')}`
+      (b.etapes ? `, par ${b.etapes.map(e => nommerBrut(e.nom)).join(', puis ')}`
                 : rue ? `, ${nommerBrut(rue.nom)}` : '') +
+      (b.tours > 1 ? `, ${b.tours} tours` : '') +
       (sait ? `, ${b.feux} feu${b.feux > 1 ? 'x' : ''}` : '') +
       `, environ ${minutes} minutes` +
       (b.score ? `, ${b.score}` : ''));

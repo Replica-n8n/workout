@@ -521,6 +521,12 @@ button.secondaire {
 /* Les chevrons entre les rues sont de la ponctuation, pas du texte : ils ne
    doivent pas peser autant que les noms qu'ils séparent. */
 .boucle .fleche { color: var(--trait2, #4a535e); font-weight: 700; }
+/* La fleche d'amorce : elle dit « on rejoint la boucle ici », ce qui n'est
+   pas la meme chose qu'un simple enchainement de rues. */
+.boucle .vers { color: var(--vert); font-weight: 700; }
+/* Le nombre de tours se lit AVANT de choisir : quatre tours d'un kilometre
+   et une boucle unique de quatre ne sont pas la meme sortie. */
+.boucle .tours { display: block; margin-top: 2px; color: var(--texte); font-weight: 600; }
 
 /* -------------------------------------------------------- mon quartier */
 
