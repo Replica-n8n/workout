@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et le module.
    ========================================================================= */
 
-const VERSION = '1.3.1';
+const VERSION = '1.4.0';
 const SHELL = 'gvt-shell-' + VERSION;
 
 const FILES = [
@@ -18,7 +18,8 @@ const FILES = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
-  './icons/apple-touch-icon.png'
+  './icons/apple-touch-icon.png',
+  './fonts/roboto-flex-latin.woff2'
 ];
 
 self.addEventListener('install', e => {

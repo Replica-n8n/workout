@@ -5,20 +5,45 @@
    fonctionner dans une salle sans réseau ne peut pas dépendre d'un script
    distant pour AVOIR SES COULEURS : hors ligne, la page s'affichait nue.
    Tout est donc écrit ici, sans dépendance et sans build.
+
+   Depuis 1.4.0 : apparence Material 3 Expressive, la langue du Pixel.
+   Couleurs pleines et claires, formes qui changent d'état, chiffres étroits
+   et très gras. L'ancienne apparence sombre (palette Tailwind slate et sky)
+   vit dans l'historique git, à la version 1.3.1.
+
+   Contrastes mesurés : texte 14,4 à 15,9:1 ; secondaire 7,8:1 ; accent sur
+   surface 6,2:1 ; blanc sur accent 7,4:1 ; contour des cases 4,5:1 (non
+   textuel, 3:1 suffit).
    ========================================================================= */
 
+/* La police vit dans le dépôt, pas chez Google : même règle que pour les
+   couleurs, rien ne se charge depuis le réseau. Sous-ensemble latin, axes de
+   largeur et de graisse seulement : 58 Ko, contre 191 Ko avec l'axe de
+   taille optique, dont rien ici ne se sert. */
+@font-face{
+  font-family:"Roboto Flex";
+  font-style:normal;
+  font-weight:100 1000;
+  font-stretch:25% 151%;
+  font-display:swap;
+  src:url(../fonts/roboto-flex-latin.woff2) format("woff2");
+}
+
 :root{
-  --bg:#0f172a;
-  --surface:rgba(30,41,59,.72);
-  --surface-plein:#1e293b;
-  --creux:#0b1220;
-  --line:rgba(148,163,184,.18);
-  --text:#f8fafc;
-  --dim:#94a3b8;
-  --accent:#38bdf8;
-  --warn:#fbbf24;
-  --ff:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
-  --ff-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+  --bg:#F7F5FF;
+  --surface:#ECE9FB;
+  --surface-plein:#FFFFFF;
+  --creux:#E3E0F2;
+  --tonal:#DDE1FF;
+  --sur-tonal:#1B2A8C;
+  --text:#1B1B21;
+  --dim:#46464F;
+  --contour:#777680;
+  --accent:#3346C8;
+  --fini:#1F6B45;
+  --ff:"Roboto Flex",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --ressort:cubic-bezier(.34,1.56,.64,1);
   --pad:16px;
 }
 
@@ -52,18 +77,9 @@ body{
   clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;
 }
 
-.lab{
-  margin:0;font-size:.66rem;font-weight:700;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--accent);
-}
+.lab{margin:0;font-size:.82rem;font-weight:700;color:var(--accent);}
 
-.panneau{
-  background:var(--surface);
-  border:1px solid var(--line);
-  border-radius:20px;
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
-}
+.panneau{background:var(--surface);border-radius:28px;}
 
 /* ------------------------------------------------------------- en-tête */
 
@@ -76,34 +92,54 @@ body{
 
 .marque{
   margin:0 0 12px;text-align:center;
-  font-size:1.35rem;font-weight:800;letter-spacing:-.02em;
-  text-transform:uppercase;font-style:italic;
+  font-size:1.3rem;font-weight:800;font-variation-settings:"wdth" 118;
 }
-.marque em{font-style:italic;color:var(--accent);}
+.marque em{font-style:normal;color:var(--accent);}
 
 .chrono-bloc{
   display:flex;flex-direction:column;align-items:center;
-  padding:14px 16px 16px;
+  padding:10px 16px 16px;
+}
+
+/* Le chrono dans son anneau ondulé, l'indicateur de progression propre à
+   Material 3 Expressive. L'anneau montre la part du repos qui RESTE.
+
+   ⚠️ À 3,7 rem dans un anneau de 188 px, « 01:14 » débordait sur l'onde.
+   Mesuré à 3,3 rem dans 196 px : 127 px de texte pour 142 px de vide
+   intérieur. `font-stretch` et `font-variation-settings` donnent la même
+   largeur ici (vérifié) ; la taille était la seule cause. */
+.chrono-cadran{
+  display:grid;place-items:center;position:relative;
+  width:196px;height:196px;
+}
+.anneau{position:absolute;inset:0;width:100%;height:100%;}
+.anneau-fond{fill:none;stroke:var(--tonal);stroke-width:9;}
+.anneau-onde{
+  fill:none;stroke:var(--accent);stroke-width:9;
+  stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:100 100;
+  transition:stroke-dashoffset .25s linear;
 }
 
 .chrono{
-  font-family:var(--ff-mono);
-  font-size:3.6rem;line-height:1.05;font-weight:800;
+  position:relative;
+  font-size:3.3rem;line-height:1.05;font-weight:850;
+  font-variation-settings:"wdth" 40;
   font-variant-numeric:tabular-nums;
-  color:#e2e8f0;
+  color:var(--text);
   transition:color .2s ease;
 }
-.chrono.actif{color:var(--warn);text-shadow:0 0 18px rgba(251,191,36,.45);}
-.chrono.fini{color:var(--accent);}
+.chrono.actif{color:var(--accent);}
+.chrono.fini{color:var(--fini);}
 
 .chrono-etat{
-  margin:2px 0 10px;
-  font-size:.66rem;font-weight:700;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--dim);min-height:1em;
+  margin:4px 0 10px;
+  font-size:.85rem;font-weight:600;color:var(--dim);min-height:1em;
 }
 
-/* En-tête compact : sous le défilement, le titre s'efface et le chrono
-   passe sur une ligne, pour que la grille de séries reste visible.
+/* En-tête compact : sous le défilement, le titre s'efface, l'anneau aussi,
+   et le chrono passe sur une ligne, pour que la grille de séries reste
+   visible.
 
    Le fond opaque est porté par l'en-tête lui-même, pas par le bloc du
    chrono : sinon le texte de la section suivante défilait dans la marge
@@ -111,16 +147,17 @@ body{
 .entete.compact{
   padding:6px 0 8px;
   padding-top:calc(6px + env(safe-area-inset-top));
-  background:rgba(15,23,42,.97);
-  box-shadow:0 8px 22px rgba(15,23,42,.85);
+  background:rgba(247,245,255,.97);
+  box-shadow:0 6px 18px rgba(27,27,33,.12);
 }
 .entete.compact .marque{display:none;}
 .entete.compact .chrono-bloc{
   flex-direction:row;justify-content:space-between;align-items:center;
-  gap:12px;padding:8px 12px;
-  background:rgba(15,23,42,.94);
+  gap:12px;padding:8px 12px;border-radius:24px;
 }
-.entete.compact .chrono{font-size:2.1rem;}
+.entete.compact .chrono-cadran{display:contents;}
+.entete.compact .anneau{display:none;}
+.entete.compact .chrono{font-size:2.3rem;}
 .entete.compact .chrono-etat{display:none;}
 
 /* --------------------------------------------------------------- corps */
@@ -136,13 +173,13 @@ body{
 
 .champ{
   width:112px;min-height:44px;
-  background:var(--creux);color:var(--text);
-  border:1px solid #334155;border-radius:12px;
+  background:var(--surface-plein);color:var(--text);
+  border:2px solid var(--contour);border-radius:14px;
   padding:6px 10px;text-align:center;
   font-family:var(--ff);font-size:1rem;font-weight:700;
   -moz-appearance:textfield;
 }
-.champ:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(56,189,248,.2);}
+.champ:focus{outline:none;border-color:var(--accent);}
 .champ::placeholder{font-weight:500;color:var(--dim);}
 /* Les flèches natives volent la moitié d'un champ déjà étroit. */
 .champ::-webkit-outer-spin-button,
@@ -150,11 +187,9 @@ body{
 
 .charge-cible{
   display:flex;align-items:center;justify-content:center;
-  background:rgba(56,189,248,.1);
-  border:1px solid rgba(56,189,248,.3);
-  border-radius:14px;padding:12px;
-  color:var(--accent);
-  font-size:1.85rem;font-weight:800;
+  background:var(--tonal);border-radius:22px;padding:12px;
+  color:var(--sur-tonal);
+  font-size:2.5rem;font-weight:900;font-variation-settings:"wdth" 60;
   font-variant-numeric:tabular-nums;
 }
 
@@ -162,27 +197,29 @@ body{
 
 /* ------------------------------------------------------------- onglets */
 
+/* Un groupe de boutons reliés : le bouton choisi prend une forme pleine et
+   arrondie, ses voisins gardent des coins serrés.
+   ⚠️ 8 px entre les boutons, pas les 2 à 3 px du modèle de Google : la règle
+   du dépôt veut 8 px entre deux cibles voisines, et l'audit l'a relevé. La
+   forme reliée tient par les coins, pas par l'écart. */
 .onglets{display:flex;gap:8px;margin-bottom:22px;}
 
 .onglet{
   flex:1 1 0;min-height:48px;
-  background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  color:var(--text);font-family:var(--ff);font-size:.92rem;font-weight:700;
-  cursor:pointer;transition:transform .1s ease,border-color .15s ease;
+  background:var(--creux);border:0;border-radius:10px;
+  color:var(--text);font-family:var(--ff);font-size:.95rem;font-weight:700;
+  cursor:pointer;
+  transition:border-radius .35s var(--ressort),background-color .2s ease,transform .1s ease;
 }
+.onglet:first-child{border-radius:24px 10px 10px 24px;}
+.onglet:last-child{border-radius:10px 24px 24px 10px;}
 .onglet:active{transform:scale(.96);}
-.onglet[aria-pressed="true"]{
-  border-color:var(--accent);
-  background:rgba(56,189,248,.14);
-  color:var(--accent);
-}
+.onglet[aria-pressed="true"]{background:var(--accent);color:#fff;border-radius:24px;}
+.onglet:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
 
 /* ----------------------------------------------------------- exercices */
 
-.seance-titre{
-  margin:0 0 14px;font-size:.72rem;font-weight:700;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--accent);
-}
+.seance-titre{margin:0 0 14px;font-size:.95rem;font-weight:700;color:var(--accent);}
 
 .exo{
   padding:14px 16px 16px;margin-bottom:14px;
@@ -200,7 +237,7 @@ body{
    compteur dit déjà « 6 / 6 séries »). */
 .exo.fini .exo-nom{color:var(--dim);}
 .exo.fini .exo-presc{color:var(--dim);}
-.exo.fini .exo-compte{color:var(--accent);}
+.exo.fini .exo-compte{color:var(--fini);}
 .exo.fini .series,
 .exo.fini .jauge{opacity:.45;}
 
@@ -208,19 +245,18 @@ body{
   display:flex;justify-content:space-between;align-items:baseline;
   gap:12px;margin-bottom:10px;
 }
-.exo-nom{margin:0;font-size:.95rem;font-weight:700;}
+.exo-nom{margin:0;font-size:1rem;font-weight:700;}
 .exo-presc{
   margin:3px 0 0;font-size:.78rem;font-weight:600;
   color:var(--accent);
 }
 .exo-compte{
-  font-size:.66rem;font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--dim);white-space:nowrap;
+  font-size:.82rem;font-weight:700;color:var(--accent);white-space:nowrap;
   font-variant-numeric:tabular-nums;
 }
 
 .jauge{
-  height:6px;background:var(--creux);border-radius:999px;
+  height:8px;background:var(--tonal);border-radius:999px;
   overflow:hidden;margin-bottom:14px;
 }
 .jauge span{
@@ -237,22 +273,23 @@ body{
   position:relative;display:block;aspect-ratio:1;min-height:44px;
   cursor:pointer;
 }
+/* Les séries changent de FORME en se cochant : du carré arrondi au rond.
+   L'état se lit à la forme autant qu'à la couleur, ce qui tient aussi pour
+   quelqu'un qui distingue mal les teintes. */
 .serie input{
   position:absolute;inset:0;width:100%;height:100%;margin:0;
   appearance:none;-webkit-appearance:none;
   background:var(--surface-plein);
-  border:2px solid #334155;border-radius:12px;
-  cursor:pointer;transition:background .15s ease,border-color .15s ease;
+  border:2px solid var(--contour);border-radius:12px;
+  cursor:pointer;
+  transition:border-radius .35s var(--ressort),background-color .15s ease,border-color .15s ease;
 }
-.serie input:checked{
-  background:var(--accent);border-color:var(--accent);
-  box-shadow:0 0 12px rgba(56,189,248,.45);
-}
-.serie input:focus-visible{outline:2px solid #fff;outline-offset:2px;}
+.serie input:checked{background:var(--accent);border-color:var(--accent);border-radius:50%;}
+.serie input:focus-visible{outline:2px solid var(--text);outline-offset:2px;}
 .serie::after{
   content:"";position:absolute;left:50%;top:46%;
   width:26%;height:48%;
-  border:solid #0f172a;border-width:0 3px 3px 0;
+  border:solid #fff;border-width:0 3px 3px 0;
   transform:translate(-50%,-50%) rotate(45deg) scale(.4);
   opacity:0;transition:opacity .12s ease,transform .12s ease;
   pointer-events:none;
@@ -269,34 +306,33 @@ body{
 
 /* ------------------------------------------------------------- divers */
 
+/* Boutons tonals : un fond plein clair plutôt qu'un contour fantôme. */
 .btn-fantome{
   min-height:44px;padding:8px 22px;
-  background:rgba(51,65,85,.55);border:1px solid var(--line);border-radius:999px;
-  color:var(--dim);font-family:var(--ff);
-  font-size:.66rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-  cursor:pointer;transition:transform .1s ease,color .15s ease;
+  background:var(--tonal);border:0;border-radius:20px;
+  color:var(--sur-tonal);font-family:var(--ff);
+  font-size:.9rem;font-weight:650;
+  cursor:pointer;transition:transform .1s ease;
 }
 .btn-fantome:active{transform:scale(.96);}
-.btn-fantome:hover{color:var(--text);}
 .btn-vider{display:block;width:100%;margin:6px 0 0;}
+.btn-vider.arme{background:#F9DEDC;color:#410E0B;}
 
 .installer{
   display:block;width:100%;min-height:48px;margin:0 0 18px;
-  background:rgba(56,189,248,.12);
-  border:1px dashed rgba(56,189,248,.55);border-radius:14px;
-  color:var(--accent);font-family:var(--ff);
-  font-size:.82rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  background:var(--tonal);border:0;border-radius:20px;
+  color:var(--sur-tonal);font-family:var(--ff);
+  font-size:.95rem;font-weight:700;
   cursor:pointer;transition:transform .1s ease;
 }
 .installer:active{transform:scale(.98);}
 
 .installer-ios{
   margin:0 0 18px;padding:12px 14px;
-  border:1px dashed rgba(56,189,248,.4);border-radius:14px;
+  background:var(--surface);border-radius:20px;
   font-size:.82rem;color:var(--dim);text-align:center;
 }
 .installer-ios strong{color:var(--accent);}
-.btn-vider.arme{color:var(--warn);border-color:rgba(251,191,36,.5);}
 
 /* `display` déclaré dans une classe bat la règle `[hidden]{display:none}` du
    navigateur, qui a la même spécificité et passe avant. Sans cette ligne, la
@@ -307,12 +343,12 @@ body{
 .topbar{
   position:fixed;left:0;right:0;top:0;z-index:100;
   display:flex;align-items:center;justify-content:center;gap:14px;
-  padding:10px 16px;background:var(--accent);color:#0b1220;
+  padding:10px 16px;background:var(--accent);color:#fff;
   font-size:.85rem;font-weight:700;
 }
 .topbar button{
   min-height:36px;padding:4px 14px;border:0;border-radius:999px;
-  background:#0b1220;color:var(--text);font-weight:700;cursor:pointer;
+  background:#fff;color:var(--accent);font-weight:700;cursor:pointer;
 }
 
 @media (prefers-reduced-motion:reduce){

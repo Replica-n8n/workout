@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GVT Tracker</title>
 <meta name="description" content="Suivi de séances German Volume Training : charge à 60 % du 1RM, séries cochées une à une, repos chronométré. Fonctionne hors ligne.">
-<meta name="theme-color" content="#0f172a">
-<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#F7F5FF">
+<meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GVT">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
@@ -27,7 +27,17 @@
 <header class="entete" id="entete">
   <p class="marque">GVT <em>Tracker</em></p>
   <div class="panneau chrono-bloc">
-    <div class="chrono" id="chrono">00:00</div>
+    <div class="chrono-cadran">
+      <!-- ⚠️ width/height 0 et fill none EN ATTRIBUTS : la feuille de style les
+           remplace, mais au premier lancement qui suit une mise à jour, le HTML
+           neuf peut arriver avec l'ANCIEN CSS encore en cache. Sans ces
+           attributs, l'anneau non stylé s'affichait en grand disque noir. -->
+      <svg class="anneau" viewBox="0 0 200 200" width="0" height="0" aria-hidden="true" focusable="false">
+        <circle class="anneau-fond" cx="100" cy="100" r="80" fill="none"/>
+        <path class="anneau-onde" id="anneau" pathLength="100" fill="none"/>
+      </svg>
+      <div class="chrono" id="chrono">00:00</div>
+    </div>
     <p class="chrono-etat" id="chrono-etat">Repos</p>
     <button class="btn-fantome" type="button" id="chrono-reset">Réinitialiser</button>
   </div>

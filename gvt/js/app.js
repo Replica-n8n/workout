@@ -43,7 +43,10 @@ const PAS_LB = 5;
 
 /* ------------------------------------------------------------ stockage */
 
-const CLES = { series: 'gvt.series', seance: 'gvt.seance', rm: 'gvt.rm', echeance: 'gvt.echeance' };
+const CLES = {
+  series: 'gvt.series', seance: 'gvt.seance', rm: 'gvt.rm', echeance: 'gvt.echeance',
+  duree: 'gvt.duree'
+};
 
 function lire(cle, defaut) {
   try {
@@ -154,6 +157,44 @@ const RETARD_MAX = 2000;
 const elChrono = $('#chrono');
 const elEtat = $('#chrono-etat');
 
+/* L'anneau ondulé autour du chrono (l'indicateur de progression ondulé de
+   Material 3 Expressive).
+
+   Il montre la part du repos qui RESTE, pas celle écoulée : c'est ce qu'on
+   lit en revenant vers la barre, « encore un tiers ». Sa longueur est
+   normalisée à 100 (`pathLength`), l'écart de tirets vaut donc directement
+   un pourcentage, quelle que soit la forme de l'onde. */
+const elAnneau = $('#anneau');
+
+/* ⚠️ L'anneau est FACULTATIF pour le module. Pages sert le HTML avec dix
+   minutes de cache HTTP : on peut rouvrir l'app juste après une mise à jour
+   avec l'ancien index.html, sans anneau, et le nouveau app.js déjà en cache.
+   Un `setAttribute` sur null arrêtait alors tout le module au chargement :
+   chrono figé, séries qui ne s'enregistrent plus, en pleine séance. */
+(function dessinerOnde() {
+  if (!elAnneau) return;
+  const cx = 100, cy = 100, R = 80, amplitude = 3.2, ondes = 16, pas = 360;
+  let d = '';
+  for (let i = 0; i <= pas; i++) {
+    const t = -Math.PI / 2 + 2 * Math.PI * i / pas;
+    const r = R + amplitude * Math.sin(ondes * (t + Math.PI / 2));
+    d += (i ? ' L' : 'M') + (cx + r * Math.cos(t)).toFixed(1) + ',' + (cy + r * Math.sin(t)).toFixed(1);
+  }
+  elAnneau.setAttribute('d', d + 'Z');
+})();
+
+/* La durée du repos en cours, gardée à côté de l'échéance : sans elle, un
+   repos repris après un rechargement connaîtrait sa fin mais pas son début,
+   et l'anneau ne saurait pas quelle part il reste. */
+let duree = lire(CLES.duree, 0) || 0;
+
+function majAnneau(partRestante) {
+  if (!elAnneau) return;
+  const p = Math.max(0, Math.min(1, partRestante));
+  elAnneau.style.strokeDashoffset = String(100 * (1 - p));
+}
+majAnneau(0);
+
 function mmss(secondes) {
   const s = Math.max(0, secondes);
   return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
@@ -162,6 +203,8 @@ function mmss(secondes) {
 function lancerRepos(secondes) {
   echeance = Date.now() + secondes * 1000;
   ecrire(CLES.echeance, echeance);
+  duree = secondes;
+  ecrire(CLES.duree, duree);
   prendreVerrou();
   demarrerBattement();
   battement();
@@ -182,6 +225,7 @@ function battement() {
   const restant = Math.ceil((echeance - Date.now()) / 1000);
 
   if (restant > 0) {
+    majAnneau(duree ? (echeance - Date.now()) / (duree * 1000) : 0);
     elChrono.textContent = mmss(restant);
     elChrono.classList.add('actif');
     elChrono.classList.remove('fini');
@@ -193,6 +237,7 @@ function battement() {
   arreterBattement();
   echeance = 0;
   ecrire(CLES.echeance, 0);
+  majAnneau(0);
   rendreVerrou();
   elChrono.textContent = '00:00';
   elChrono.classList.remove('actif');
@@ -215,6 +260,9 @@ function reinitialiserChrono() {
   arreterBattement();
   echeance = 0;
   ecrire(CLES.echeance, 0);
+  duree = 0;
+  ecrire(CLES.duree, 0);
+  majAnneau(0);
   rendreVerrou();
   elChrono.textContent = '00:00';
   elChrono.classList.remove('actif', 'fini');
