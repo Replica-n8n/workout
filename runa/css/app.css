@@ -217,6 +217,62 @@ body {
 /* Les durées : des options nommées et visibles, pas un curseur qu'il faut
    viser au pixel près à une main. */
 .chips { display: flex; gap: 6px; }
+/* ⚠️ `display: flex` bat la règle `[hidden]` du navigateur : sans cette
+   ligne, les durées resteraient à l'écran quand on choisit une distance. */
+.chips[hidden], #bloc-distance[hidden] { display: none; }
+
+/* Distance ou durée : deux boutons, l'un est toujours choisi. */
+.bascule {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  background: var(--case);
+  border: 1px solid var(--trait);
+  border-radius: 12px;
+}
+.bascule button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--texte);
+  font-family: inherit;
+  font-weight: 600;
+  font-size: .95rem;
+}
+.bascule button[aria-pressed="true"] { background: var(--vert); color: #0d0f12; }
+
+/* La distance se tape : un seul champ, le clavier numérique, l'unité à côté. */
+#bloc-distance { display: flex; flex-direction: column; gap: 6px; }
+.champ {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 0 14px;
+  background: var(--case);
+  border: 1px solid var(--trait);
+  border-radius: 12px;
+  cursor: text;
+}
+.champ:focus-within { border-color: var(--vert); }
+.champ input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--texte);
+  font-family: inherit;
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.champ span { font-size: 1.05rem; color: var(--gris); }
+.champ.faux { border-color: var(--rouge); }
+.aide { font-size: .78rem; color: var(--gris); margin: 0 2px; }
+.aide.faux { color: var(--rouge); }
 .chip {
   flex: 1;
   min-height: 46px;

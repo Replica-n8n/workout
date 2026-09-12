@@ -53,8 +53,21 @@
       <span class="chevron" aria-hidden="true">›</span>
     </button>
 
-    <p class="titre">Durée</p>
-    <div class="chips" id="durees" role="group" aria-label="Durée de la sortie"></div>
+    <p class="titre">Je veux courir</p>
+    <div class="bascule" role="group" aria-label="Choisir la sortie par distance ou par durée">
+      <button type="button" id="mesure-distance" aria-pressed="true">Une distance</button>
+      <button type="button" id="mesure-duree" aria-pressed="false">Une durée</button>
+    </div>
+    <div id="bloc-distance">
+      <label class="champ">
+        <input id="distance" type="text" inputmode="decimal" enterkeyhint="search"
+               autocomplete="off" spellcheck="false" aria-label="Distance en kilomètres"
+               aria-describedby="distance-aide">
+        <span aria-hidden="true">km</span>
+      </label>
+      <p class="aide" id="distance-aide" aria-live="polite"></p>
+    </div>
+    <div class="chips" id="durees" role="group" aria-label="Durée de la sortie" hidden></div>
 
     <div class="ligne">
       <span class="nom">Allure</span>

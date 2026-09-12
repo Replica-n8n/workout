@@ -164,7 +164,11 @@ export function message(e) {
   if (e && e.message === 'bloque') return 'La requête n’est jamais partie. Vérifiez le réseau, ou un bloqueur de contenu sur ce site.';
   if (e && e.message && e.message.startsWith('http ')) return `Le serveur OpenStreetMap a refusé (${e.message}). Réessayez dans une minute.`;
   if (e && e.message === 'desert') return 'Trop peu de rues autour de ce départ pour tracer une boucle.';
-  if (e && e.message === 'rien') return 'Aucune boucle trouvée ici à cette distance. Essayez une autre durée.';
+  if (e && e.message === 'rien') return 'Aucune boucle trouvée ici à cette distance. Essayez une autre distance.';
+  if (e && e.message === 'distance') return 'Entrez une distance entre 1 et 21 km.';
+  /* Au-delà de 15 km, l'app ne propose que des tours : dire pourquoi, sinon
+     « aucun parcours » à 18 km se lit comme une panne là où 15 km marche. */
+  if (e && e.message === 'tours') return 'Aucun parcours en tours de cette distance autour d’ici. Au-delà de 15 km, Runa ne propose que des tours : essayez 15 km ou moins.';
   if (e && e.message === 'reseau') return 'Pas de réseau, et ce quartier n’est pas encore en mémoire.';
   return 'Échec : ' + (e && e.message ? e.message : 'inconnu');
 }

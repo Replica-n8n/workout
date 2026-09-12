@@ -13,3 +13,6 @@ runa/graphify-out/
 
 # Les critiques de design (skill impeccable) : archives locales, pas des pages du site.
 .impeccable/
+
+# La fiche produit de la skill impeccable : locale, pas une page du site.
+runa/PRODUCT.md

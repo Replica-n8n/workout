@@ -96,7 +96,7 @@ test('sans position, le message dit quoi faire', () => {
 
 test('chaque panne connue a sa phrase, jamais le repli technique', () => {
   const pannes = [{ code: 2 }, { code: 3 }, ...['debit', 'silence', 'bloque', 'http 504',
-    'desert', 'rien', 'reseau'].map(m => new Error(m))];
+    'desert', 'rien', 'reseau', 'distance', 'tours'].map(m => new Error(m))];
   const vues = new Set();
   for (const e of pannes) {
     const m = message(e);

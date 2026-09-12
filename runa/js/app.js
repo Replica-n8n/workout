@@ -25,6 +25,8 @@ import { parcoursSimple } from '../lib/simple.js';
 import { contoursDesParcs, parcoursAuParc } from '../lib/parc.js';
 import { choisirProposition } from '../lib/proposition.js';
 import { feraNuit, minutesDeJour } from '../lib/soleil.js';
+import { lireKm, distanceValide, cibleM, minutesDeSortie, toursSeuls, km,
+         libelleChercher, aideDistance, resumeResultats } from '../lib/cible.js';
 import { meteo, phrase as phraseMeteo } from '../lib/meteo.js';
 
 const $ = id => document.getElementById(id);
@@ -41,6 +43,8 @@ const DUREES = [20, 30, 40, 50, 60];
 
 const etat = {
   depart: null,
+  mesure: 'distance',   // ou 'duree' : les coureurs préfèrent la distance
+  distanceKm: 5,        // null tant que le champ ne contient pas une distance valide
   duree: 30,
   allure: 360,          // secondes par km
   eviterFeux: true,
@@ -86,6 +90,12 @@ function lireReglages() {
     const r = JSON.parse(localStorage.getItem(CLE));
     if (r) Object.assign(etat, {
       depart: r.depart ?? null,
+      /* Ceux qui avaient déjà l'app passent à la distance, préférée des
+         coureurs, avec leur réglage d'avant converti : 30 min à 6:00 donnent
+         le champ prérempli à 5 km, pas une valeur tombée du ciel. */
+      mesure: r.mesure === 'duree' ? 'duree' : 'distance',
+      distanceKm: distanceValide(r.distanceKm) ? r.distanceKm
+        : Math.min(21, Math.max(1, Math.round(distancePour((r.duree ?? 30) * 60, r.allure ?? 360) / 100) / 10)),
       duree: r.duree ?? 30,
       allure: r.allure ?? 360,
       eviterFeux: r.eviterFeux ?? true,
@@ -99,7 +109,8 @@ function lireReglages() {
 function ecrireReglages() {
   try {
     localStorage.setItem(CLE, JSON.stringify({
-      depart: etat.depart, duree: etat.duree, allure: etat.allure,
+      depart: etat.depart, mesure: etat.mesure, distanceKm: etat.distanceKm,
+      duree: etat.duree, allure: etat.allure,
       eviterFeux: etat.eviterFeux, nuit: etat.nuit,
       nuitChoisieLe: etat.nuitChoisieLe, mode: etat.mode
     }));
@@ -130,7 +141,7 @@ function choixDuJour() {
 
 function calerLaNuit() {
   if (choixDuJour() || !etat.depart) return false;
-  const voulu = feraNuit(etat.depart, etat.duree);
+  const voulu = feraNuit(etat.depart, minutesDeSortie(etat));
   if (voulu === etat.nuit) return false;
   etat.nuit = voulu;
   return true;
@@ -239,8 +250,46 @@ function peindreReglages() {
   $('ouvrir-favoris').hidden = n === 0;
   $('favoris-combien').textContent = n === 1 ? '1 parcours gardé' : `${n} parcours gardés`;
 
-  const km = distancePour(etat.duree * 60, etat.allure) / 1000;
-  $('chercher').textContent = `Trouver trois boucles de ${km.toFixed(1)} km`;
+  peindreMesure();
+}
+
+/**
+ * Distance ou durée : les deux boutons, le champ, la ligne d'aide, et le
+ * libellé du bouton principal.
+ *
+ * Séparé de `peindreReglages` parce qu'il se repeint à CHAQUE touche du
+ * champ : tout repeindre relancerait la météo et reconstruirait les boutons
+ * pour un chiffre tapé.
+ *
+ * ⚠️ Ne réécrit JAMAIS le champ pendant qu'on tape dedans : remettre « 7,5 »
+ * au propre sous le doigt déplacerait le curseur, et « 7, » en cours de
+ * saisie redeviendrait « 7 ».
+ */
+function peindreMesure() {
+  const distance = etat.mesure === 'distance';
+  $('mesure-distance').setAttribute('aria-pressed', String(distance));
+  $('mesure-duree').setAttribute('aria-pressed', String(!distance));
+  $('bloc-distance').hidden = !distance;
+  $('durees').hidden = distance;
+
+  const champ = $('distance');
+  if (document.activeElement !== champ) {
+    champ.value = etat.distanceKm == null ? champ.value : String(etat.distanceKm).replace('.', ',');
+  }
+  const aide = aideDistance(etat);
+  $('distance-aide').textContent = aide.texte;
+  $('distance-aide').classList.toggle('faux', aide.erreur);
+  champ.closest('.champ').classList.toggle('faux', aide.erreur);
+  champ.setAttribute('aria-invalid', String(aide.erreur));
+
+  $('chercher').textContent = libelleChercher(etat);
+}
+
+function choisirMesure(mesure) {
+  etat.mesure = mesure;
+  ecrireReglages();
+  /* Changer de mesure change la durée probable, donc peut-être le mode nuit. */
+  peindreReglages();
 }
 
 /* Un point de départ mémorisé qui ne se voit pas est un piège : l'app
@@ -372,6 +421,13 @@ async function positionner() {
 }
 
 /* --------------------------------------------------------------- rayon */
+
+/* La distance pour charger le quartier. Un champ en cours de saisie (« 1 »
+   avant « 12 ») ne doit pas laisser la carte noire : on retombe alors sur la
+   durée, qui a toujours une valeur. */
+function cibleOuRepli() {
+  return cibleM(etat) ?? distancePour(etat.duree * 60, etat.allure);
+}
 
 /* La spec demandait une boîte de D/4 autour du départ. Mesuré : c'est deux
    fois trop, et chaque mètre de rayon coûte des mégaoctets sur le réseau
@@ -582,7 +638,7 @@ function afficherLaProposition(cible) {
   /* Le résumé disait « 3 boucles » alors qu'il y en avait quatre. */
   const n = etat.boucles.length;
   $('resume').textContent =
-    `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+    resumeResultats(n, cible);
 }
 
 function ajouterUneProposition(genre, calcul, cible, renouveler = false) {
@@ -631,6 +687,48 @@ function ajouterUneProposition(genre, calcul, cible, renouveler = false) {
   }, 0);
 }
 
+/**
+ * Au-delà de 15 km, que des parcours en tours : à retenir, ou au parc.
+ *
+ * ⚠️ Pas de boucles ordinaires ici, et c'est voulu. Dans le quartier que
+ * l'app télécharge, une boucle de 21 km sortait à 14 km : afficher « 21 km »
+ * au-dessus aurait été faux. Les tours, eux, tombent juste. Voir `lib/cible.js`.
+ *
+ * Calculés tout de suite et non en différé comme les propositions en plus :
+ * sans eux, l'écran des résultats n'aurait rien à montrer.
+ */
+let toursVus = new Set();
+
+async function chercherDesTours(cible, nouvelleGraine) {
+  dire('Calcul des parcours en tours...');
+  /* Laisser le message s'afficher : le calcul prend quelques secondes et
+     ne rend pas la main. */
+  await new Promise(r => setTimeout(r, 30));
+
+  const graphe = etat.graphe, depart = etat.depart, parcs = etat.parcs;
+  const calculer = exclure => [
+    parcoursSimple(graphe, { depart, distanceCible: cible, exclure }),
+    parcoursAuParc(graphe, parcs, { depart, distanceCible: cible, exclure })
+  ].filter(Boolean);
+
+  /* « Autres parcours » saute ceux déjà montrés, et repart du début une fois
+     tous passés plutôt que de dire qu'il n'y a rien. */
+  if (!nouvelleGraine) toursVus = new Set();
+  let trouves = calculer(toursVus.size ? toursVus : null);
+  if (!trouves.length && toursVus.size) { toursVus = new Set(); trouves = calculer(null); }
+  if (!trouves.length) throw new Error('tours');
+  for (const b of trouves) if (b.signature) toursVus.add(b.signature);
+
+  /* Le moins de feux d'abord, comme pour la proposition en plus. */
+  trouves.sort((a, b) => (a.feux ?? Infinity) - (b.feux ?? Infinity));
+  etat.boucles = trouves;
+  etat.extras = {};
+  etat.choisie = 0;
+  etat.enCourse = false;
+  montrerResultats(cible);
+  dire(null);
+}
+
 /* --------------------------------------------------------------- action */
 
 let enCours = false;
@@ -641,6 +739,13 @@ async function chercher(nouvelleGraine) {
   $('chercher').disabled = true;
 
   try {
+    /* ⚠️ AVANT la position : sans départ mémorisé, une distance fausse
+       déclenchait d'abord la demande de localisation, pour se faire refuser
+       ensuite. */
+    if (cibleM(etat) == null) {
+      $('distance').focus();
+      throw new Error('distance');
+    }
     if (!etat.depart) {
       dire('Recherche de votre position...');
       etat.depart = await positionner();
@@ -652,7 +757,7 @@ async function chercher(nouvelleGraine) {
        d'invalider `grapheDe` ici, la condition de réemploi compare déjà
        `nuit` : l'écrire deux fois ferait diverger les deux règles. */
     calerLaNuit();
-    const cible = distancePour(etat.duree * 60, etat.allure);
+    const cible = cibleM(etat);
     await assurerQuartier(cible);
 
     if (!etat.graphe || etat.graphe.voisins.size < 50) {
@@ -663,6 +768,11 @@ async function chercher(nouvelleGraine) {
     $('recu').hidden = true;
     normaliserMode();
     if (nouvelleGraine) etat.graine = (etat.graine + 1) % 100000;
+
+    if (toursSeuls(cible)) {
+      await chercherDesTours(cible, nouvelleGraine);
+      return;
+    }
 
     /* Huit candidates au lieu de trois, puis on classe. Ce n'est pas un
        luxe : mesuré à la dixième sortie, la meilleure des huit est à 67 %
@@ -943,7 +1053,7 @@ function reprendre(f) {
   $('resume').textContent = 'Parcours gardé';
   ouvrirResultats();
   if (etat.depart) {
-    assurerQuartier(distancePour(etat.duree * 60, etat.allure), { reseau: false })
+    assurerQuartier(cibleOuRepli(), { reseau: false })
       .catch(() => {});
   }
 }
@@ -1009,7 +1119,7 @@ function montrerResultats(cible) {
   // développeur, elle n'aide personne à choisir une boucle.
   const n = etat.boucles.length;
   $('resume').textContent =
-    `${n} boucle${n > 1 ? 's' : ''} autour de ${(cible / 1000).toFixed(1)} km`;
+    resumeResultats(n, cible);
   ouvrirResultats();
 }
 
@@ -1259,7 +1369,7 @@ $('ma-position').addEventListener('click', async () => {
     }
     // Montrer le quartier dans la foulée : une carte noire sous un rond vert
     // ne dit rien de ce qu'il faut faire ensuite.
-    await assurerQuartier(distancePour(etat.duree * 60, etat.allure));
+    await assurerQuartier(cibleOuRepli());
     if (etat.depart.precision <= 50) dire(null);
   } catch (e) {
     direUneErreur(message(e));
@@ -1269,6 +1379,26 @@ $('ma-position').addEventListener('click', async () => {
 });
 
 $('chercher').addEventListener('click', () => chercher(false));
+$('mesure-distance').addEventListener('click', () => choisirMesure('distance'));
+$('mesure-duree').addEventListener('click', () => choisirMesure('duree'));
+$('distance').addEventListener('input', e => {
+  etat.distanceKm = lireKm(e.target.value);
+  /* On ne mémorise que ce qui est valide : une faute de frappe ne doit pas
+     effacer la distance d'hier au prochain lancement. */
+  if (distanceValide(etat.distanceKm)) ecrireReglages();
+  peindreMesure();
+});
+/* « Rechercher » sur le clavier du téléphone lance la recherche : c'est ce
+   que la touche annonce, et ça évite d'aller chercher le bouton du pouce. */
+$('distance').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  e.target.blur();
+  chercher(false);
+});
+$('distance').addEventListener('blur', () => {
+  if (distanceValide(etat.distanceKm)) peindreMesure();   // « 7.5 » s'écrit « 7,5 »
+});
 $('autres').addEventListener('click', () => chercher(true));
 $('retour').addEventListener('click', () => {
   montrerEcran('reglages');
@@ -1410,7 +1540,7 @@ if (etat.depart) carte.montrer(null, etat.depart);
    demander au réseau. Sinon la carte reste noire jusqu'au premier appui, ce
    qui se lit comme une panne. */
 if (etat.depart) {
-  const cible = distancePour(etat.duree * 60, etat.allure);
+  const cible = cibleOuRepli();
   assurerQuartier(cible, { reseau: false })
     .then(trouve => {
       /* ⚠️ Rien en mémoire ne veut pas dire « tant pis ». C'est ce que ça
