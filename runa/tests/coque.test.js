@@ -91,3 +91,12 @@ test('« Reprendre » garde sa couleur à côté du bouton principal', () => {
   assert.match(css, /button\.principal\.reprendre\s*\{[^}]*background:\s*var\(--jaune\)/,
     'la règle de Reprendre doit être au moins aussi précise que button.principal');
 });
+
+test('la bascule distance / durée ne colle pas au champ qui la suit', () => {
+  /* L'écran de réglages n'espace pas ses lignes. La bascule, le champ de
+     distance et les durées ont chacun une bordure : collés, les deux traits
+     se lisaient comme un chevauchement d'un ou deux pixels. */
+  const marge = declarations('.bascule').filter(([p]) => p === 'margin-bottom').pop();
+  assert.ok(marge, '.bascule doit garder une marge sous elle');
+  assert.ok(parseFloat(marge[1]) >= 6, `marge trop faible : ${marge[1]}`);
+});

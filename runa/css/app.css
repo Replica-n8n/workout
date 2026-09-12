@@ -223,6 +223,11 @@ body {
 
 /* Distance ou durée : deux boutons, l'un est toujours choisi. */
 .bascule {
+  /* ⚠️ L'écran de réglages n'espace pas ses lignes : elles se touchent. Sans
+     bordure ça ne se voit pas, mais la bascule et le champ (ou les durées)
+     en ont chacun une, et les deux traits collés se lisaient comme un
+     chevauchement d'un ou deux pixels. */
+  margin-bottom: 8px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
