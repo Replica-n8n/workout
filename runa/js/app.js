@@ -452,6 +452,9 @@ function rayonPour(distanceCible) {
 
    Elle est donc appelable seule : dès qu'on a une position, on montre le
    quartier. Chercher des boucles ensuite ne coûte plus rien. */
+/* Le téléchargement de quartier en cours, s'il y en a un : voir plus bas. */
+let enRoute = null;
+
 async function assurerQuartier(cible, { reseau = true } = {}) {
   const rayon = rayonPour(cible);
 
@@ -474,9 +477,24 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
   const boite = bbox(etat.depart, rayon + MARGE_ZONE);
   let osm;
 
+  /* ⚠️ Un seul téléchargement à la fois pour un même quartier. Au lancement,
+     l'app va chercher le quartier qui manque ; toucher « Trouver » avant la
+     fin en lançait un DEUXIÈME, identique. Mesuré le 2026-09-12 : deux
+     requêtes simultanées au serveur principal pour une seule recherche, puis
+     une troisième au serveur de secours. Or ces serveurs n'acceptent que
+     deux requêtes à la fois par connexion : l'app s'occupait elle-même les
+     deux places, et chaque « Réessayez » en rajoutait. C'était une part des
+     « serveur saturé » vus sur le téléphone. On attend donc celui qui est
+     en route, puis on revérifie : il a déjà construit le graphe. */
+  if (reseau && enRoute && enRoute.lat === etat.depart.lat &&
+      enRoute.lon === etat.depart.lon && enRoute.rayon >= rayon) {
+    await enRoute.promesse;
+    return assurerQuartier(cible, { reseau });
+  }
+
   if (reseau) {
     dire('Préparation...', { part: 'attente' });
-    osm = await charger(etat.depart, rayon + MARGE_ZONE, boite, info => {
+    const promesse = charger(etat.depart, rayon + MARGE_ZONE, boite, info => {
       if (info.phase === 'memoire') return dire('Quartier déjà en mémoire', { part: 1 });
       if (info.phase === 'attente') {
         return dire('Le serveur prépare vos rues...', { part: 'attente' });
@@ -487,6 +505,13 @@ async function assurerQuartier(cible, { reseau = true } = {}) {
       dire(`Téléchargement de vos rues, ${(info.octets / 1e6).toFixed(1)} Mo. `
          + `Une seule fois par quartier.`, { part: info.part });
     });
+    const ici = { lat: etat.depart.lat, lon: etat.depart.lon, rayon, promesse };
+    enRoute = ici;
+    try {
+      osm = await promesse;
+    } finally {
+      if (enRoute === ici) enRoute = null;
+    }
   } else {
     // Au lancement : ce qui est déjà en mémoire, tout de suite, sans réseau.
     osm = await chargerDuCache(etat.depart, rayon);

@@ -99,17 +99,19 @@ export function resumeResultats(n, metres) {
 }
 
 /**
- * La ligne sous le champ de distance.
+ * Le texte à droite dans le champ de distance : la durée probable, ou la
+ * plage permise si la saisie ne va pas.
+ *
+ * Court, parce qu'il tient DANS le champ : une ligne de plus sous le champ
+ * faisait sauter le panneau à chaque bascule entre distance et durée. Que
+ * les longues distances donnent des tours, le bouton le dit déjà
+ * (« Trouver des parcours en tours de 18 km »).
  *
  * @returns {{texte: string, erreur: boolean}}
  */
 export function aideDistance(r) {
-  const saisie = r.distanceKm;
-  if (!distanceValide(saisie)) {
-    return { texte: `Entrez une distance entre ${DISTANCE_MIN_KM} et ${DISTANCE_MAX_KM} km.`, erreur: true };
+  if (!distanceValide(r.distanceKm)) {
+    return { texte: `${DISTANCE_MIN_KM} à ${DISTANCE_MAX_KM} km`, erreur: true };
   }
-  const env = `Environ ${duree(minutesDeSortie(r))} à votre allure`;
-  return toursSeuls(saisie * 1000)
-    ? { texte: `${env}. Au-delà de 15 km, Runa propose des parcours en tours.`, erreur: false }
-    : { texte: env, erreur: false };
+  return { texte: `≈ ${duree(minutesDeSortie(r))}`, erreur: false };
 }

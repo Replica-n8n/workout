@@ -58,15 +58,16 @@
       <button type="button" id="mesure-distance" aria-pressed="true">Une distance</button>
       <button type="button" id="mesure-duree" aria-pressed="false">Une durée</button>
     </div>
-    <div id="bloc-distance">
-      <label class="champ">
-        <input id="distance" type="text" inputmode="decimal" enterkeyhint="search"
-               autocomplete="off" spellcheck="false" aria-label="Distance en kilomètres"
-               aria-describedby="distance-aide">
-        <span aria-hidden="true">km</span>
-      </label>
-      <p class="aide" id="distance-aide" aria-live="polite"></p>
-    </div>
+    <!-- Même hauteur que la rangée de durées : choisir l'un ou l'autre ne doit
+         pas faire sauter tout ce qui est dessous. La durée probable se lit donc
+         DANS le champ, pas sur une ligne de plus. -->
+    <label class="champ" id="bloc-distance">
+      <input id="distance" type="text" inputmode="decimal" enterkeyhint="search"
+             autocomplete="off" spellcheck="false" aria-label="Distance en kilomètres"
+             aria-describedby="distance-aide">
+      <span class="unite" aria-hidden="true">km</span>
+      <span class="equiv" id="distance-aide" aria-live="polite"></span>
+    </label>
     <div class="chips" id="durees" role="group" aria-label="Durée de la sortie" hidden></div>
 
     <div class="ligne">

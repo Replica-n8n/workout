@@ -29,10 +29,17 @@ const BASE = 'runa-osm';
 const MAGASIN = 'tuiles';
 const PEREMPTION = 30 * 24 * 3600 * 1000;   // 30 jours, comme la spec
 
-/* Deux serveurs : le principal tombe régulièrement en limite de débit, et
-   se retrouver bloqué en pleine ville sans deuxième porte serait bête. */
+/* Trois serveurs : le principal tombe régulièrement en limite de débit, et
+   se retrouver bloqué en pleine ville sans autre porte serait bête.
+
+   ⚠️ Deux ne suffisaient pas. Le 2026-09-12, « saturé » à répétition sur
+   son téléphone : le principal rendait 504 après 16 s sur la vraie requête
+   de Villeray, et kumi ne répondait plus du tout (40 s sans un octet). Le
+   miroir de VK (maps.mail.ru) a rendu la même zone en 3,6 s : 3,75 Mo,
+   données de la minute, 17 parcs avec leur contour, en-tête CORS ouvert. */
 const SERVEURS = [
   'https://overpass-api.de/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter'
 ];
 

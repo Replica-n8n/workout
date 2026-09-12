@@ -243,36 +243,40 @@ body {
 }
 .bascule button[aria-pressed="true"] { background: var(--vert); color: #0d0f12; }
 
-/* La distance se tape : un seul champ, le clavier numérique, l'unité à côté. */
-#bloc-distance { display: flex; flex-direction: column; gap: 6px; }
+/* La distance se tape : un seul champ, le clavier numérique, l'unité à côté.
+   ⚠️ Exactement la hauteur d'une durée (46 px) : passer de l'un à l'autre
+   faisait grandir puis rétrécir le panneau, champ de 56 px plus une ligne
+   d'aide que la rangée de durées n'a pas. */
 .champ {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 0 14px;
+  gap: 8px;
+  height: 46px;
+  padding: 0 12px;
   background: var(--case);
   border: 1px solid var(--trait);
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: text;
 }
 .champ:focus-within { border-color: var(--vert); }
 .champ input {
-  flex: 1;
+  width: 3.1em;
   min-width: 0;
+  flex: 0 1 auto;
   border: 0;
   outline: 0;
+  padding: 0;
   background: transparent;
   color: var(--texte);
   font-family: inherit;
-  font-size: 1.6rem;
+  font-size: 1.15rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.champ span { font-size: 1.05rem; color: var(--gris); }
+.champ .unite { font-size: .95rem; color: var(--gris); }
+.champ .equiv { margin-left: auto; font-size: .82rem; color: var(--gris); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .champ.faux { border-color: var(--rouge); }
-.aide { font-size: .78rem; color: var(--gris); margin: 0 2px; }
-.aide.faux { color: var(--rouge); }
+.champ.faux .equiv { color: var(--rouge); }
 .chip {
   flex: 1;
   min-height: 46px;

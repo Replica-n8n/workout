@@ -73,3 +73,20 @@ test('toucher la carte ne déplace le départ que là où c’est annoncé', () 
   assert.match(avant, /\$\('resultats'\)\.hidden/,
     'le toucher de carte doit être ignoré quand l’écran des résultats (et donc la course) est affiché');
 });
+
+test('un quartier ne se télécharge qu’une fois, même demandé deux fois', () => {
+  /* Au lancement l'app va chercher le quartier manquant ; toucher « Trouver »
+     avant la fin en lançait un second, identique. Les serveurs publics
+     n'acceptent que deux requêtes à la fois par connexion : l'app les
+     occupait toutes les deux elle-même, et récoltait « serveur saturé ».
+     `js/app.js` ne s'importe pas sous Node : on vérifie la discipline. */
+  const debut = app.indexOf('async function assurerQuartier(');
+  assert.ok(debut > 0, 'assurerQuartier a disparu');
+  const corps = app.slice(debut, app.indexOf('\n}\n', debut));
+  const attente = corps.indexOf('await enRoute.promesse');
+  const lancement = corps.indexOf('charger(etat.depart');
+  assert.ok(attente > 0, 'un second appel doit attendre le téléchargement en route');
+  assert.ok(attente < lancement, 'l’attente doit précéder tout nouveau téléchargement');
+  assert.match(corps, /enRoute = ici/, 'le téléchargement lancé doit se déclarer en route');
+  assert.match(corps, /finally\s*\{\s*if \(enRoute === ici\) enRoute = null;/, 'et se retirer même en cas d’échec');
+});

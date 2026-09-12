@@ -80,13 +80,13 @@ test('le résumé des résultats dit boucles ou tours, à la virgule', () => {
   assert.equal(resumeResultats(1, 18000), '1 parcours en tours autour de 18 km');
 });
 
-test('la ligne sous le champ : durée probable, tours, ou erreur', () => {
-  assert.deepEqual(aideDistance({ ...R, distanceKm: 8, allure: 350 }),
-    { texte: 'Environ 47 min à votre allure', erreur: false });
-  const long = aideDistance({ ...R, distanceKm: 18, allure: 350 });
-  assert.equal(long.erreur, false);
-  assert.equal(long.texte, 'Environ 1 h 45 à votre allure. Au-delà de 15 km, Runa propose des parcours en tours.');
-  assert.deepEqual(aideDistance({ ...R, distanceKm: null }),
-    { texte: 'Entrez une distance entre 1 et 21 km.', erreur: true });
-  assert.equal(aideDistance({ ...R, distanceKm: 12, allure: 300 }).texte, 'Environ 1 h à votre allure');
+test('dans le champ : la durée probable, ou la plage permise', () => {
+  assert.deepEqual(aideDistance({ ...R, distanceKm: 8, allure: 350 }), { texte: '≈ 47 min', erreur: false });
+  assert.deepEqual(aideDistance({ ...R, distanceKm: 18, allure: 350 }), { texte: '≈ 1 h 45', erreur: false });
+  assert.deepEqual(aideDistance({ ...R, distanceKm: 12, allure: 300 }), { texte: '≈ 1 h', erreur: false });
+  assert.deepEqual(aideDistance({ ...R, distanceKm: null }), { texte: '1 à 21 km', erreur: true });
+  /* Il tient dans un champ de 46 px sur un écran de 360 : jamais une phrase. */
+  for (const km of [1, 5.5, 15, 21]) {
+    assert.ok(aideDistance({ ...R, distanceKm: km, allure: 540 }).texte.length <= 9, String(km));
+  }
 });
