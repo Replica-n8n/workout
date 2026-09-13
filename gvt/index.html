@@ -4,16 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GVT Tracker</title>
-<meta name="description" content="Suivi de séances German Volume Training : charge à 60 % du 1RM, séries cochées une à une, repos chronométré. Fonctionne hors ligne.">
-<meta name="theme-color" content="#F7F5FF">
-<meta name="color-scheme" content="light">
+<meta name="description" content="Suivi de séances German Volume Training : une série à la fois, repos chronométré, charge et disques calculés. Fonctionne hors ligne.">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f9ff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10131a">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="GVT">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/gvt.css">
 </head>
 <body>
 
@@ -24,52 +25,82 @@
   <button type="button" id="update-btn">Recharger</button>
 </div>
 
-<header class="entete" id="entete">
-  <p class="marque">GVT <em>Tracker</em></p>
-  <div class="panneau chrono-bloc">
-    <div class="chrono-cadran">
-      <!-- ⚠️ width/height 0 et fill none EN ATTRIBUTS : la feuille de style les
-           remplace, mais au premier lancement qui suit une mise à jour, le HTML
-           neuf peut arriver avec l'ANCIEN CSS encore en cache. Sans ces
-           attributs, l'anneau non stylé s'affichait en grand disque noir. -->
-      <svg class="anneau" viewBox="0 0 200 200" width="0" height="0" aria-hidden="true" focusable="false">
-        <circle class="anneau-fond" cx="100" cy="100" r="80" fill="none"/>
-        <path class="anneau-onde" id="anneau" pathLength="100" fill="none"/>
-      </svg>
-      <div class="chrono" id="chrono">00:00</div>
+<div class="app" id="app" data-phase="serie">
+
+  <header class="tete">
+    <button class="pilule" type="button" id="ouvrir-seance" aria-haspopup="dialog"></button>
+    <button class="rond" type="button" id="ouvrir-reglages" aria-haspopup="dialog" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><circle cx="5" cy="12" r="2.2" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><circle cx="19" cy="12" r="2.2" fill="currentColor"/></svg>
+    </button>
+  </header>
+
+  <nav class="exos" id="exos" aria-label="Exercices de la séance"></nav>
+
+  <!-- SÉRIE : une seule chose à regarder, lisible téléphone posé au sol -->
+  <main class="ecran serie" id="ecran-serie">
+    <h1 class="nom" id="nom"></h1>
+    <p class="compteur" id="compteur" aria-live="off"><b id="num"></b><span id="sur"></span></p>
+    <p class="presc" id="presc"></p>
+    <div id="bloc-charge"></div>
+    <div id="bloc-fin"></div>
+    <div class="pousse"></div>
+    <button class="gros" type="button" id="action" data-action-principale></button>
+  </main>
+
+  <!-- REPOS : tout l'écran se vide au fil du temps -->
+  <section class="ecran repos" id="ecran-repos" aria-label="Repos">
+    <div class="calque clair" aria-hidden="true"><b id="temps-1">00:00</b></div>
+    <!-- Le décompte foncé vit DANS le niveau, qui le coupe à sa hauteur : sa
+         couleur a ainsi son vrai fond comme ancêtre, et se mesure juste. -->
+    <div class="niveau" id="niveau"><div class="calque fonce" aria-hidden="true"><b id="temps-2">00:00</b></div></div>
+    <p class="sr-only" id="temps-lu"></p>
+    <div class="repos-haut"><span class="etiquette">Repos</span></div>
+    <div class="repos-bas">
+      <div class="ensuite"><span>Ensuite</span><b id="ensuite"></b></div>
+      <div class="actions">
+        <button type="button" id="plus15">+15 s</button>
+        <button type="button" class="passer" id="passer">Passer le repos</button>
+      </div>
+      <button type="button" class="annuler" id="annuler"></button>
     </div>
-    <p class="chrono-etat" id="chrono-etat">Repos</p>
-    <button class="btn-fantome" type="button" id="chrono-reset">Réinitialiser</button>
+  </section>
+</div>
+
+<dialog class="feuille" id="reglages" aria-labelledby="reglages-titre">
+  <div class="feuille-tete">
+    <h2 id="reglages-titre">Réglages</h2>
   </div>
-</header>
 
-<main class="corps">
-
-  <button class="installer" type="button" id="install" hidden>
-    Installer sur l'écran d'accueil
-  </button>
-  <p class="installer-ios" id="install-ios" hidden>
-    Pour l'installer : <strong>Partager</strong>, puis « Sur l'écran d'accueil ».
-  </p>
-
-  <section class="panneau charge">
-    <div class="charge-tete">
-      <h2 class="lab">Charge · 60 % du 1RM</h2>
-      <label class="sr-only" for="rm">Ton 1RM en livres</label>
-      <input class="champ" type="number" id="rm" inputmode="numeric" min="0" max="1500" step="5" placeholder="1RM (lb)">
+  <section class="bloc" id="bloc-rm">
+    <h3 id="rm-titre"></h3>
+    <div class="rm-ligne">
+      <button type="button" class="pas" id="rm-moins" aria-label="Retirer 5 lb au 1RM">−5</button>
+      <label class="rm-champ"><span class="sr-only">1RM en livres</span>
+        <input type="number" id="rm" inputmode="numeric" min="0" max="1500" step="5" placeholder="1RM">
+        <span aria-hidden="true">lb</span>
+      </label>
+      <button type="button" class="pas" id="rm-plus" aria-label="Ajouter 5 lb au 1RM">+5</button>
     </div>
-    <div class="charge-cible" id="charge-cible">-- lb</div>
-    <p class="charge-detail" id="charge-detail">Entre ton 1RM pour obtenir la charge.</p>
+    <div class="rm-apercu" id="rm-apercu"></div>
   </section>
 
-  <nav class="onglets" id="onglets" aria-label="Séances"></nav>
+  <section class="bloc">
+    <h3>Séance</h3>
+    <div class="options" id="seances"></div>
+  </section>
 
-  <section id="seance"></section>
+  <section class="bloc">
+    <button type="button" class="large ton" id="vider">Vider les séries de cette séance</button>
+    <button type="button" class="large ton" id="install" hidden>Installer sur l'écran d'accueil</button>
+    <p class="note" id="install-ios" hidden>Pour l'installer : <strong>Partager</strong>, puis « Sur l'écran d'accueil ».</p>
+    <p class="note" id="version"></p>
+  </section>
 
-  <button class="btn-fantome btn-vider" type="button" id="vider">Vider les séries de cette séance</button>
+  <!-- Fermer EN BAS, sous le pouce : un bouton en haut d'une feuille qui
+       monte du bas oblige à changer de prise. -->
+  <div class="feuille-pied"><button type="button" class="gros" id="fermer" data-action-principale>Fermer</button></div>
+</dialog>
 
-</main>
-
-<script type="module" src="js/app.js"></script>
+<script type="module" src="js/gvt.js"></script>
 </body>
 </html>

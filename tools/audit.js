@@ -254,7 +254,11 @@ function reglesEcran(nom, out, opts = {}) {
 
   /* 5. L'action principale doit rester sous le pouce et entière à l'écran.
         C'est le bug du min-height:100dvh qui poussait le bouton dehors. */
-  const principal = ecran.querySelector('.foot .btn-primary, .foot button:last-child') ||
+  /* Une app peut DÉCLARER son action principale par `data-action-principale` :
+     c'est plus sûr que de la deviner, et sans ça GVT 2.x, qui n'a ni `.foot`
+     ni `.screen`, n'avait AUCUNE action principale contrôlée. */
+  const principal = [...ecran.querySelectorAll('[data-action-principale]')].find(visible) ||
+                    ecran.querySelector('.foot .btn-primary, .foot button:last-child') ||
                     (modal ? modal.querySelector('button[type=submit], button:last-of-type') : null);
   if (principal) {
     const r = principal.getBoundingClientRect();
@@ -401,26 +405,30 @@ export const PLAN_LA_COUR = [
 ];
 
 /* GVT n'a pas de sections `.screen` : c'est une page unique, et le fond de
-   mesure est donc `document.body`. Les trois étapes ne changent pas d'écran,
-   elles changent d'ÉTAT : repos au repos, repos en cours, en-tête replié par
-   le défilement. Aucune n'a d'`attendu`, faute d'écran à nommer.
+   mesure est donc `document.body`. Les étapes ne changent pas d'écran, elles
+   changent d'ÉTAT : série, repos en cours, réglages ouverts. Aucune n'a
+   d'`attendu`, faute d'écran à nommer.
 
-   À lancer avec `pageDefile: true`, voir la règle 6 :
-       await a.audit({ ecrans: a.PLAN_GVT, pageDefile: true, format: 'texte' });  */
+   Depuis 2.0.0 la page ne défile plus (une série ou un repos tient dans
+   l'écran) : on lance SANS `pageDefile`, la règle 6 doit tenir.
+       await a.audit({ ecrans: a.PLAN_GVT, format: 'texte' });  */
 export const PLAN_GVT = [
-  { nom: 'séance', aller: async () => {
-      document.querySelectorAll('#seance input:checked').forEach(b => b.click());
-      document.querySelector('#chrono-reset').click();
-      scrollTo(0, 0);
+  /* GVT 2.x alterne deux ÉTATS d'un même écran, plus la feuille de réglages.
+     Chaque étape ramène d'abord à un point connu : sortir d'un repos en
+     cours, fermer la feuille. */
+  { nom: 'série', aller: async () => {
+      const f = document.querySelector('#reglages'); if (f && f.open) f.close();
+      if (document.querySelector('#app').dataset.phase === 'repos') document.querySelector('#passer').click();
       await attendre(250);
     } },
-  { nom: 'séance, repos en cours', aller: async () => {
-      document.querySelector('#seance input[type=checkbox]').click();
-      await attendre(150);
+  { nom: 'repos en cours', aller: async () => {
+      document.querySelector('#action').click();
+      await attendre(300);
     } },
-  { nom: 'séance, en-tête replié', aller: async () => {
-      scrollTo(0, 400);
-      await attendre(250);
+  { nom: 'réglages ouverts', aller: async () => {
+      if (document.querySelector('#app').dataset.phase === 'repos') document.querySelector('#passer').click();
+      document.querySelector('#ouvrir-reglages').click();
+      await attendre(300);
     } }
 ];
 
