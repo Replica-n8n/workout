@@ -51,22 +51,28 @@ const reglage = exo => /^A\d/.test(exo.court) ? PRINCIPAL : ACCESSOIRE;
 const POURCENT = 0.6;
 const PAS_LB = 5;
 
-/* Les disques disponibles, du plus lourd au plus léger, avec leurs couleurs
-   de compétition en livres. Largeur et hauteur servent au dessin. */
+/* Les disques disponibles, du plus lourd au plus léger, avec les couleurs
+   des disques en caoutchouc en livres. `fonce` borde et crante le disque,
+   `texte` est la couleur de sa gravure, mesurée sur son disque (6,6:1 sur le
+   bleu, 10,2 sur le jaune, 5,0 sur le vert, 15,6 sur le blanc). Largeur et
+   hauteur servent au dessin de la barre. */
 const DISQUES = [
-  { lb: 45, couleur: '#1F4FD8', h: 56, l: 13 },
-  { lb: 35, couleur: '#F2C200', h: 50, l: 12 },
-  { lb: 25, couleur: '#2E9E4F', h: 44, l: 11 },
-  { lb: 10, couleur: '#F4F4F4', h: 34, l: 9, bord: true },
-  { lb: 5, couleur: '#2A2A2A', h: 26, l: 7 },
-  { lb: 2.5, couleur: '#5A5A5A', h: 20, l: 6 }
+  { lb: 45, couleur: '#1F4FD8', fonce: '#163a9f', texte: '#ffffff', h: 56, l: 13 },
+  { lb: 35, couleur: '#F2C200', fonce: '#b89300', texte: '#1c1b1d', h: 50, l: 12 },
+  { lb: 25, couleur: '#2E9E4F', fonce: '#1f7438', texte: '#1c1b1d', h: 44, l: 11 },
+  { lb: 10, couleur: '#F4F4F4', fonce: '#b9b9b9', texte: '#1c1b1d', h: 34, l: 9, bord: true },
+  { lb: 5, couleur: '#2A2A2A', fonce: '#111111', texte: '#ffffff', h: 26, l: 7 },
+  { lb: 2.5, couleur: '#5A5A5A', fonce: '#3a3a3a', texte: '#ffffff', h: 20, l: 6 }
 ];
+/* Salle à disques en fonte noire, et exercice sans barre. */
+const FONTE = { couleur: '#2b2b2d', fonce: '#161617', texte: '#e5e2e3' };
+const SANS_BARRE = { couleur: '#4a494c', fonce: '#323134', texte: '#e5e2e3' };
 
 /* ------------------------------------------------------------ stockage */
 
 const CLES = {
   series: 'gvt.series', seance: 'gvt.seance', rm: 'gvt.rm', echeance: 'gvt.echeance',
-  duree: 'gvt.duree', rms: 'gvt.rms', repris: 'gvt.repris'
+  duree: 'gvt.duree', rms: 'gvt.rms', repris: 'gvt.repris', disques: 'gvt.disques'
 };
 
 function lire(cle, defaut) {
@@ -129,20 +135,69 @@ function svgBarre(total, barre, largeur, hauteur) {
     '<rect x="' + (cx - manchon / 2) + '" y="' + (milieu - 5) + '" width="' + manchon + '" height="10" rx="3" fill="var(--outline-variant)"/>';
   let gauche = cx - manchon / 2 - 2, droite = cx + manchon / 2 + 2;
   cote.forEach(d => {
-    const h = d.h * k, l = d.l * k, bord = d.bord ? ' stroke="#8a8a8a" stroke-width="1"' : '';
+    const enFonte = typeDisques === 'fonte';
+    const h = d.h * k, l = d.l * k, bord = d.bord && !enFonte ? ' stroke="#8a8a8a" stroke-width="1"' : '';
+    const couleur = enFonte ? FONTE.couleur : d.couleur;
     gauche -= l;
-    g += '<rect x="' + gauche.toFixed(1) + '" y="' + (milieu - h / 2).toFixed(1) + '" width="' + (l - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2.5" fill="' + d.couleur + '"' + bord + '/>';
-    g += '<rect x="' + droite.toFixed(1) + '" y="' + (milieu - h / 2).toFixed(1) + '" width="' + (l - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2.5" fill="' + d.couleur + '"' + bord + '/>';
+    g += '<rect x="' + gauche.toFixed(1) + '" y="' + (milieu - h / 2).toFixed(1) + '" width="' + (l - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2.5" fill="' + couleur + '"' + bord + '/>';
+    g += '<rect x="' + droite.toFixed(1) + '" y="' + (milieu - h / 2).toFixed(1) + '" width="' + (l - 1).toFixed(1) + '" height="' + h.toFixed(1) + '" rx="2.5" fill="' + couleur + '"' + bord + '/>';
     droite += l;
   });
   return '<svg viewBox="0 0 ' + largeur + ' ' + hauteur + '" aria-hidden="true" focusable="false">' + g + '</svg>';
+}
+
+/* ------------------------------------------------------------ le disque */
+
+let typeDisques = lire(CLES.disques, 'couleur') === 'fonte' ? 'fonte' : 'couleur';
+let tour = 0;
+/* Vrai pendant le quart de tour qui suit « Série faite ». */
+let enGeste = false;
+
+/* Le disque qui habille l'écran : le plus lourd sur la barre. */
+function habit(exo, charge) {
+  if (!exo.barre) return { d: SANS_BARRE, gravure: 'SANS BARRE' };
+  if (!charge) return { d: SANS_BARRE, gravure: '1RM À RÉGLER' };
+  const haut = disquesPourCote(charge, exo.barre).cote[0];
+  if (!haut) return { d: SANS_BARRE, gravure: 'BARRE SEULE' };
+  const gravure = String(haut.lb).replace('.', ',') + ' LB';
+  return typeDisques === 'fonte' ? { d: FONTE, gravure } : { d: haut, gravure };
+}
+
+/* `part` : ce qui reste du repos, de 0 à 1. Absent en série : disque plein. */
+function svgDisque(h, part, idArc) {
+  const d = h.d;
+  let crans = '';
+  for (let i = 0; i < 24; i++) {
+    const a = i * 15 * Math.PI / 180;
+    crans += '<line x1="' + (100 + 91 * Math.cos(a)).toFixed(1) + '" y1="' + (100 + 91 * Math.sin(a)).toFixed(1) +
+      '" x2="' + (100 + 96 * Math.cos(a)).toFixed(1) + '" y2="' + (100 + 96 * Math.sin(a)).toFixed(1) + '" stroke="' + d.fonce + '" stroke-width="1.6"/>';
+  }
+  const anneau = part === undefined
+    ? '<circle cx="100" cy="100" r="76" fill="none" stroke="' + d.couleur + '" stroke-width="48"/>'
+    : '<circle cx="100" cy="100" r="76" fill="none" stroke="var(--vide)" stroke-width="48"/>' +
+      '<circle cx="100" cy="100" r="76" fill="none" stroke="' + d.couleur + '" stroke-width="48" pathLength="100" stroke-dasharray="' +
+        (Math.max(0, Math.min(1, part)) * 100).toFixed(2) + ' 100" transform="rotate(-90 100 100)"/>';
+  return '<defs><path id="' + idArc + '" d="M 100 100 m -64 0 a 64 64 0 1 1 128 0"/></defs>' +
+    '<circle cx="100" cy="101.5" r="100" fill="rgba(0,0,0,.16)"/>' + anneau +
+    '<g class="tourne" style="transform:rotate(' + tour + 'deg)">' +
+      '<circle cx="100" cy="100" r="99" fill="none" stroke="' + d.fonce + '" stroke-width="2.5"/>' + crans +
+      '<text font-size="15" font-weight="900" letter-spacing="3" fill="' + d.texte + '" style="font-family:var(--ff);font-variation-settings:&quot;wdth&quot; 70">' +
+        '<textPath href="#' + idArc + '" startOffset="50%" text-anchor="middle">' + h.gravure + '</textPath></text>' +
+    '</g>';
+}
+
+/* « 45 + 25 de chaque côté », en court, pour la tuile de charge. */
+function detailCote(total, barre) {
+  const r = disquesPourCote(total, barre);
+  if (r.tropLeger) return 'plus léger que la barre';
+  return r.cote.length ? r.cote.map(d => String(d.lb).replace('.', ',')).join(' + ') + ' de chaque côté' : 'barre seule';
 }
 
 function phraseDisques(total, barre) {
   const r = disquesPourCote(total, barre);
   if (r.tropLeger) return 'Plus léger que la barre de ' + barre + ' lb.';
   const liste = r.cote.length ? r.cote.map(d => String(d.lb).replace('.', ',')).join(' + ') : 'aucun disque';
-  return 'Barre ' + barre + ' lb · de chaque côté : ' + liste +
+  return 'Barre ' + barre + ' · ' + liste + ' de chaque côté' +
     (r.reste > 0 ? ' (il manque ' + String(r.reste * 2).replace('.', ',') + ' lb)' : '');
 }
 
@@ -163,20 +218,23 @@ function reveillerAudio() {
   } catch {}
 }
 
+/* La fin du repos sonne comme un disque posé au sol : deux coups sourds qui
+   descendent, audibles dans une salle bruyante sans être agressifs. */
 function bip() {
   if (!audio || audio.state !== 'running') return;
   const t0 = audio.currentTime;
-  [0, 0.28, 0.56].forEach(decalage => {
+  [0, 0.42].forEach(decalage => {
     const osc = audio.createOscillator();
     const gain = audio.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = 880;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(190, t0 + decalage);
+    osc.frequency.exponentialRampToValueAtTime(60, t0 + decalage + 0.3);
     gain.gain.setValueAtTime(0.0001, t0 + decalage);
-    gain.gain.exponentialRampToValueAtTime(0.3, t0 + decalage + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + decalage + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.8, t0 + decalage + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + decalage + 0.38);
     osc.connect(gain).connect(audio.destination);
     osc.start(t0 + decalage);
-    osc.stop(t0 + decalage + 0.22);
+    osc.stop(t0 + decalage + 0.4);
   });
 }
 
@@ -279,15 +337,11 @@ function mmss(secondes) {
 
 function montrerPhase(phase) {
   elApp.dataset.phase = phase;
-  if (phase === 'repos') caler();
 }
 
-/* La hauteur réelle de l'écran de repos, pour le calque foncé du niveau. */
-function caler() {
-  const h = $('#ecran-repos').clientHeight;
-  if (h) elApp.style.setProperty('--plein', h + 'px');
-}
-addEventListener('resize', caler);
+/* L'exercice dont on se repose : son disque reste celui du repos, même si la
+   série qui vient d'être faite a terminé l'exercice. */
+let exoRepos = 0;
 
 function lancerRepos(secondes) {
   echeance = Date.now() + secondes * 1000;
@@ -316,8 +370,9 @@ function peindreRepos(restantMs) {
   const part = duree ? Math.max(0, Math.min(1, restantMs / (duree * 1000))) : 0;
   const texte = mmss(Math.ceil(restantMs / 1000));
   $('#temps-1').textContent = texte;
-  $('#temps-2').textContent = texte;
-  $('#niveau').style.height = (part * 100) + '%';
+  const exo = SEANCES[courante].exercices[exoRepos];
+  const svg = $('#disque-repos svg');
+  if (svg && exo) svg.innerHTML = svgDisque(habit(exo, exo.pct ? chargeDe(courante, exoRepos) : 0), part, 'arc-repos');
 }
 
 let dernierLu = -1;
@@ -404,18 +459,36 @@ function rendre() {
   $('#ouvrir-seance').setAttribute('aria-label', 'Séance ' + seance.onglet + ', changer de séance');
   $('#nom').textContent = exo.nom;
 
-  $('#compteur').hidden = fini;
-  $('#num').textContent = String(f + 1);
-  $('#sur').textContent = '/' + nb;
-  $('#compteur').setAttribute('aria-label', 'Série ' + (f + 1) + ' sur ' + nb);
-  $('#presc').textContent = fini ? '' : reps + ' répétitions';
+  const svgSerie = $('#disque-serie svg');
+  if (svgSerie) svgSerie.innerHTML = svgDisque(habit(exo, charge), undefined, 'arc-serie');
+  if (fini) {
+    $('#num').textContent = 'Fini';
+    $('#num').className = 'fini';
+    $('#sur').textContent = '';
+    $('#compteur').setAttribute('aria-label', exo.nom + ' terminé');
+  } else {
+    $('#num').textContent = String(f + 1);
+    $('#num').className = '';
+    $('#sur').textContent = 'sur ' + nb;
+    $('#compteur').setAttribute('aria-label', 'Série ' + (f + 1) + ' sur ' + nb);
+  }
+  const pastilles = $('#pastilles');
+  if (pastilles) {
+    pastilles.hidden = !exo.barre;
+    const haut = charge && exo.barre ? disquesPourCote(charge, exo.barre).cote[0] : null;
+    pastilles.querySelectorAll('.pastille').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.disques === typeDisques));
+      b.firstElementChild.style.background = b.dataset.disques === 'fonte' ? FONTE.couleur : (haut ? haut.couleur : DISQUES[0].couleur);
+    });
+  }
+  $('#presc').textContent = fini ? 'Toutes les séries sont faites' : reps + ' répétitions';
 
   let charges = '';
   if (!fini && exo.pct) {
     charges = charge
-      ? '<button class="charge" type="button" id="charge" aria-label="Charge ' + charge + ' livres, régler le 1RM">' +
-          (exo.barre ? svgBarre(charge, exo.barre, 96, 42) : '') +
-          '<span class="txt"><b>' + charge + ' lb</b><small>60 % du 1RM · régler</small></span></button>'
+      ? '<button class="charge" type="button" id="charge" aria-label="Charge ' + charge + ' livres, ' + (exo.barre ? detailCote(charge, exo.barre) + ', ' : '') + 'régler le 1RM">' +
+          (exo.barre ? svgBarre(charge, exo.barre, 170, 34) : '') +
+          '<b>' + charge + ' lb</b><span>' + (exo.barre ? detailCote(charge, exo.barre) : '60 % du 1RM') + '</span></button>'
       : '<button class="charge vide" type="button" id="charge">Entrer le 1RM pour la charge</button>';
   }
   $('#bloc-charge').innerHTML = charges;
@@ -452,6 +525,7 @@ function majAnnuler() {
 }
 
 $('#action').addEventListener('click', () => {
+  if (enGeste) return;
   reveillerAudio();
   const exos = SEANCES[courante].exercices;
   const exo = exos[exoCourant];
@@ -468,8 +542,34 @@ $('#action').addEventListener('click', () => {
   derniere = { cle: k, seance: courante, iExo: exoCourant, iSerie: libre };
   ecrire(CLES.repris, derniere);
   vibrer(40);
+  exoRepos = exoCourant;
+
+  /* Le quart de tour : le disque glisse sur la barre, puis le repos démarre.
+     ⚠️ Le bouton est BLOQUÉ pendant le geste : un deuxième appui dans ce
+     demi-tour de seconde aurait compté une série de plus. Sans animation
+     (réglage du téléphone), le repos démarre tout de suite. */
+  tour += 90;
+  const repos = reglage(exo).repos;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { rendre(); lancerRepos(repos); return; }
+  /* ⚠️ On fait tourner le groupe EXISTANT : `rendre()` recrée le SVG par
+     innerHTML, et un élément neuf naît à son angle final sans transition. Le
+     reste de l'écran n'est redessiné qu'une fois le geste fini. */
+  const groupe = $('#disque-serie .tourne');
+  if (groupe) groupe.style.transform = 'rotate(' + tour + 'deg)';
+  enGeste = true;
+  $('#action').disabled = true;
+  setTimeout(() => { enGeste = false; rendre(); lancerRepos(repos); }, 480);
+});
+
+/* Les deux pastilles sous le disque : couleur ou fonte, retenu par appareil. */
+$('#pastilles').addEventListener('click', e => {
+  if (enGeste) return;
+  const b = e.target.closest('.pastille');
+  if (!b || b.dataset.disques === typeDisques) return;
+  typeDisques = b.dataset.disques;
+  ecrire(CLES.disques, typeDisques);
   rendre();
-  lancerRepos(reglage(exo).repos);
+  annoncer(typeDisques === 'fonte' ? 'Disques en fonte.' : 'Disques de couleur.');
 });
 
 $('#bloc-charge').addEventListener('click', e => {
@@ -477,6 +577,7 @@ $('#bloc-charge').addEventListener('click', e => {
 });
 
 elExos.addEventListener('click', e => {
+  if (enGeste) return;
   const b = e.target.closest('[data-i]');
   if (!b) return;
   exoCourant = Number(b.dataset.i);
@@ -506,6 +607,7 @@ $('#annuler').addEventListener('click', () => {
      mauvaise séance. */
   if (SEANCES[derniere.seance]) { courante = derniere.seance; ecrire(CLES.seance, courante); }
   exoCourant = derniere.iExo;
+  tour -= 90;
   derniere = null;
   ecrire(CLES.repris, null);
   terminerRepos();
@@ -546,9 +648,16 @@ function rendreSeances() {
 }
 
 function ouvrirReglages(versLeRm) {
+  /* Le quart de tour en cours doit finir sur l'exercice qu'on vient de faire. */
+  if (enGeste) return;
   desarmerVidage();
   rendreRm();
   rendreSeances();
+  /* La feuille rouvre toujours en haut : elle gardait sa position de
+     défilement, et « Vider les séries » pouvait rouvrir à moitié caché
+     derrière le pied. */
+  const corps = elFeuille.querySelector('.feuille-corps');
+  if (corps) corps.scrollTop = 0;
   if (!elFeuille.open) elFeuille.showModal();
   if (versLeRm && !$('#bloc-rm').hidden) elRm.focus();
 }
@@ -623,6 +732,7 @@ elVider.addEventListener('click', () => {
 /* Un repos survivant d'une session précédente reprend là où il en était ;
    passé, il est simplement effacé. */
 if (echeance > Date.now()) {
+  exoRepos = derniere && derniere.seance === courante && SEANCES[courante].exercices[derniere.iExo] ? derniere.iExo : exoCourant;
   $('#ensuite').textContent = phraseEnsuite();
   majAnnuler();
   montrerPhase('repos');

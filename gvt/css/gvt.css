@@ -1,16 +1,17 @@
 /* =========================================================================
-   GVT Tracker v2 · feuille unique
+   GVT Tracker · feuille unique · thème « code des disques »
 
    Une seule chose à l'écran à la fois : la série en cours, ou le repos.
-   Pensée pour être lue à un mètre, téléphone posé au sol.
+   L'identité vient de l'objet qu'on touche à chaque série : le DISQUE. La
+   série se lit sur son insert d'acier ; le disque prend la couleur du plus
+   lourd sur la barre ; au repos, ce même disque se vide.
 
-   PALETTE : aucun code couleur choisi à la main. Tout vient de
-   material-color-utilities (SchemeFidelity), graine #1A73E8, en clair et en
-   sombre. En 1.4.0 les couleurs étaient choisies au jugé : la teinte HCT
-   280 de l'accent et les fonds à 286 donnaient du violet. Seuls les disques
-   de la barre ont des couleurs fixes, ce sont des objets réels.
+   PALETTE : générée par material-color-utilities à partir du bleu du disque
+   de 45 lb (#1F4FD8). Accent et erreur en SchemeFidelity, fonds et textes en
+   SchemeNeutral (aucune teinte : c'est ce qui évite le violet de la 1.4.0).
+   Seules les couleurs des disques sont fixes, dans gvt.js : ce sont des objets.
 
-   Rien ne se charge depuis le réseau : la police vit dans le dépôt.
+   ESPACEMENTS : une seule échelle, en variables. Aucun écart hors échelle.
    ========================================================================= */
 
 @font-face{
@@ -24,25 +25,31 @@
 
 :root{
   color-scheme:light;
-  --primary:#005bbf;--on-primary:#ffffff;
-  --secondary-container:#b2c9fe;--on-secondary-container:#3d5481;
+  --primary:#0037b1;--on-primary:#ffffff;
   --error-container:#ffdad6;--on-error-container:#93000a;
-  --surface:#f9f9ff;--surface-container-low:#f2f3fd;--surface-container:#ecedf7;
-  --surface-container-high:#e6e8f2;--surface-container-highest:#e0e2ec;
-  --on-surface:#191c23;--on-surface-variant:#414754;--outline:#727785;--outline-variant:#c1c6d6;
+  --surface:#fcf8fa;--surface-container-low:#f6f3f4;--surface-container:#f0edef;
+  --surface-container-high:#ebe7e9;--surface-container-highest:#e5e2e3;
+  --on-surface:#1c1b1d;--on-surface-variant:#474648;--outline:#787678;--outline-variant:#c8c6c7;
+  --inverse-surface:#313032;--inverse-on-surface:#f3f0f1;
+  /* l'insert d'acier et la part vide du disque au repos */
+  --acier:#d9dce1;--acier-bord:#9ea3ab;--sur-acier:#1c1b1d;--sur-acier-2:#3c3b3e;--vide:#dcd9db;
   --scrim:rgba(0,0,0,.38);
+
+  --e1:4px;--e2:8px;--e3:12px;--e4:16px;--e5:24px;--e6:32px;
   --ff:"Roboto Flex",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --ressort:cubic-bezier(.34,1.56,.64,1);
+  /* décélération franche, sans rebond */
+  --sortie:cubic-bezier(.25,1,.5,1);
 }
 @media (prefers-color-scheme:dark){
   :root{
     color-scheme:dark;
-    --primary:#adc7ff;--on-primary:#002e68;
-    --secondary-container:#2e4673;--on-secondary-container:#9eb5e8;
+    --primary:#b7c4ff;--on-primary:#002681;
     --error-container:#93000a;--on-error-container:#ffdad6;
-    --surface:#10131a;--surface-container-low:#191c23;--surface-container:#1d2027;
-    --surface-container-high:#272a31;--surface-container-highest:#32353c;
-    --on-surface:#e0e2ec;--on-surface-variant:#c1c6d6;--outline:#8b909f;--outline-variant:#414754;
+    --surface:#131315;--surface-container-low:#1c1b1d;--surface-container:#201f21;
+    --surface-container-high:#2a2a2b;--surface-container-highest:#353436;
+    --on-surface:#e5e2e3;--on-surface-variant:#c8c6c7;--outline:#929092;--outline-variant:#474648;
+    --inverse-surface:#e5e2e3;--inverse-on-surface:#313032;
+    --acier:#c4c8cf;--acier-bord:#7d828a;--vide:#2e2d2f;
     --scrim:rgba(0,0,0,.6);
   }
 }
@@ -57,6 +64,7 @@ body{
 }
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+button:disabled{cursor:default}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
 
 /* `display` déclaré dans une classe bat la règle `[hidden]{display:none}` du
@@ -73,119 +81,143 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--primary);outlin
 
 /* ---------------------------------------------------------------- en-tête */
 
-.tete{display:flex;align-items:center;gap:10px;padding:10px 14px 0;flex:none;position:relative;z-index:3}
+.tete{display:flex;align-items:center;gap:var(--e3);padding:var(--e3) var(--e4) 0;flex:none}
 .pilule{
-  border:0;min-height:44px;padding:0 18px;border-radius:22px;
+  border:0;min-height:44px;padding:0 var(--e4);border-radius:22px;
   background:var(--surface-container-high);font-size:1rem;font-weight:700;
-  display:flex;align-items:center;gap:8px;
+  display:flex;align-items:center;gap:var(--e2);transition:background-color .15s var(--sortie);
 }
 .pilule::after{content:"";width:8px;height:8px;border:solid currentColor;border-width:0 2.2px 2.2px 0;transform:translateY(-2px) rotate(45deg)}
 .rond{
   margin-left:auto;border:0;width:48px;height:48px;border-radius:24px;
   background:transparent;display:grid;place-items:center;color:var(--on-surface-variant);
+  transition:background-color .15s var(--sortie);
 }
-.rond:active{background:var(--surface-container-high)}
 
-.exos{display:flex;gap:8px;padding:10px 14px 0;flex:none;position:relative;z-index:3}
+.exos{display:flex;gap:var(--e2);padding:var(--e3) var(--e4) 0;flex:none}
 .exo{
-  flex:1;border:0;min-height:50px;border-radius:14px;background:var(--surface-container);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;
-  transition:border-radius .35s var(--ressort),background-color .2s;
+  flex:1;border:0;min-height:52px;border-radius:14px;background:var(--surface-container);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.15;
+  transition:background-color .15s var(--sortie),color .15s var(--sortie);
 }
-.exo b{font-size:.95rem}
-.exo span{font-size:.72rem;font-weight:600;color:var(--on-surface-variant);font-variant-numeric:tabular-nums}
-.exo[aria-pressed="true"]{background:var(--secondary-container);color:var(--on-secondary-container);border-radius:25px}
+.exo b{font-size:1rem}
+.exo span{font-size:.875rem;font-weight:600;color:var(--on-surface-variant);font-variant-numeric:tabular-nums}
+.exo[aria-pressed="true"]{background:var(--inverse-surface);color:var(--inverse-on-surface)}
 .exo[aria-pressed="true"] span{color:inherit}
-.exo.fini span{color:var(--primary);font-weight:700}
-.exo[aria-pressed="true"].fini span{color:inherit}
+
+@media (hover:hover){
+  .pilule:hover,.exo:not([aria-pressed="true"]):hover{background:var(--surface-container-highest)}
+  .rond:hover{background:var(--surface-container-high)}
+}
+.pilule:active,.exo:active,.rond:active{background:var(--surface-container-highest)}
 
 /* ----------------------------------------------------------------- écrans */
 
-.ecran{flex:1;min-height:0;display:flex;flex-direction:column;padding:6px 18px 18px;position:relative}
+.ecran{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;padding:var(--e2) var(--e4) var(--e4)}
 .app[data-phase="serie"] .repos,.app[data-phase="repos"] .serie{display:none}
 
-.nom{margin:14px 0 0;font-size:1.3rem;font-weight:700;text-align:center;text-wrap:balance}
-.compteur{display:flex;align-items:baseline;justify-content:center;gap:4px;margin:2px 0 0;line-height:.86}
-.compteur b{
-  font-size:min(44vw,24svh,12rem);font-weight:900;font-variation-settings:"wdth" 30;
-  color:var(--primary);font-variant-numeric:tabular-nums;
-}
-.compteur span{font-size:min(15vw,8svh,4rem);font-weight:800;font-variation-settings:"wdth" 40;color:var(--on-surface-variant)}
-.presc{text-align:center;font-size:1.1rem;font-weight:600;color:var(--on-surface-variant);margin:10px 0 0}
+.nom{margin:var(--e3) 0 0;font-size:1.3rem;line-height:1.2;font-weight:700;text-align:center;text-wrap:balance}
 
-/* La charge : touchable, c'est là qu'on règle le 1RM. */
+/* LE DISQUE. Sa taille borne tout l'écran : il cède la place quand la
+   hauteur manque, pour que la charge et le bouton restent visibles. */
+.disque{--d:min(70vw,33svh,300px);position:relative;width:var(--d);height:var(--d);margin-top:var(--e3);flex:none}
+.disque-svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.tourne{transform-box:view-box;transform-origin:100px 100px;transition:transform .5s var(--sortie)}
+/* L'insert d'acier est un vrai fond CSS : le texte se mesure sur lui. */
+.insert{
+  position:absolute;inset:25%;margin:0;border-radius:50%;
+  background:var(--acier);box-shadow:inset 0 0 0 2px var(--acier-bord);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--sur-acier);line-height:.9;text-align:center;
+}
+.insert b{font-size:calc(var(--d) * .27);font-weight:900;font-variation-settings:"wdth" 30;font-variant-numeric:tabular-nums}
+.insert b.temps{font-size:calc(var(--d) * .165)}
+.insert b.fini{font-size:calc(var(--d) * .12)}
+.insert small{font-size:max(.875rem,calc(var(--d) * .055));font-weight:800;color:var(--sur-acier-2);margin-top:var(--e1)}
+
+/* Deux pastilles : disques de couleur ou en fonte, pour changer de salle.
+   Petites à l'oeil, 44 px à toucher. */
+.pastilles{display:flex;gap:var(--e2);margin-top:var(--e1)}
+.pastille{width:44px;height:44px;border:0;background:none;border-radius:50%;display:grid;place-items:center;padding:0}
+.pastille i{width:20px;height:20px;border-radius:50%;transition:box-shadow .15s var(--sortie)}
+.pastille[data-disques="fonte"] i{box-shadow:inset 0 0 0 1.5px var(--on-surface-variant)}
+.pastille[aria-pressed="true"] i{box-shadow:0 0 0 2.5px var(--surface),0 0 0 5px var(--on-surface)}
+.pastille[data-disques="fonte"][aria-pressed="true"] i{box-shadow:inset 0 0 0 1.5px var(--on-surface-variant),0 0 0 2.5px var(--surface),0 0 0 5px var(--on-surface)}
+
+.presc{margin:var(--e1) 0 0;font-size:1.1rem;font-weight:600;color:var(--on-surface-variant);text-align:center}
+
+/* La charge : un bloc centré, la barre en haut, le poids en dessous. Tout le
+   reste de l'écran est centré, une barre à gauche et un texte à droite
+   déséquilibraient la colonne. Touchable : c'est là qu'on règle le 1RM. */
 .charge{
-  align-self:center;margin-top:14px;border:0;display:flex;align-items:center;gap:12px;
-  min-height:56px;background:var(--surface-container);border-radius:28px;padding:6px 20px 6px 12px;
+  margin-top:var(--e3);border:0;display:flex;flex-direction:column;align-items:center;text-align:center;
+  background:var(--surface-container);border-radius:24px;padding:var(--e2) var(--e5) var(--e3);min-width:232px;
+  transition:background-color .15s var(--sortie);
 }
-.charge svg{width:96px;height:42px;flex:none}
-.charge b{font-size:1.9rem;font-weight:900;font-variation-settings:"wdth" 60;font-variant-numeric:tabular-nums}
-.charge small{font-size:.8rem;font-weight:600;color:var(--on-surface-variant)}
-.charge .txt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
-.charge.vide{padding:0 22px;font-size:1.05rem;font-weight:700;color:var(--primary)}
+.charge svg{width:170px;height:34px}
+.charge b{font-size:1.6rem;line-height:1.05;font-weight:900;font-variation-settings:"wdth" 60;font-variant-numeric:tabular-nums;margin-top:var(--e1)}
+.charge span{font-size:.875rem;font-weight:600;color:var(--on-surface-variant)}
+.charge.vide{padding:var(--e3) var(--e5);font-size:1rem;font-weight:700;color:var(--primary)}
+@media (hover:hover){ .charge:hover{background:var(--surface-container-high)} }
+.charge:active{background:var(--surface-container-highest)}
 
-.fin{margin-top:18px;background:var(--secondary-container);color:var(--on-secondary-container);border-radius:28px;padding:16px 18px}
+.fin{margin-top:var(--e5);width:100%;background:var(--surface-container);border-radius:24px;padding:var(--e4) var(--e5)}
 .fin b{display:block;font-size:1.2rem}
-.fin p{margin:6px 0 0;font-size:1rem}
-.fin small{display:block;margin-top:6px;font-size:.8rem}
+.fin p{margin:var(--e2) 0 0;font-size:1rem}
+.fin small{display:block;margin-top:var(--e2);font-size:.875rem;color:var(--on-surface-variant)}
 
-.pousse{flex:1}
+/* L'espace libre pousse le bouton vers le bas, mais un écart MINIMUM le
+   sépare toujours de ce qui précède : sur un petit écran, l'espace libre
+   tombait à zéro et le bouton collait à la tuile de charge. */
+.pousse{flex:1;min-height:var(--e5)}
 .gros{
-  border:0;width:100%;min-height:76px;border-radius:38px;flex:none;
+  border:0;width:100%;min-height:72px;border-radius:36px;flex:none;
   background:var(--primary);color:var(--on-primary);
-  font-size:1.4rem;font-weight:800;font-variation-settings:"wdth" 105;
-  transition:transform .12s,border-radius .3s var(--ressort);
+  font-size:1.35rem;font-weight:800;font-variation-settings:"wdth" 105;
+  transition:transform .12s var(--sortie),filter .15s var(--sortie);
 }
-.gros:active{transform:scale(.97);border-radius:22px}
+@media (hover:hover){ .gros:not(:disabled):hover{filter:brightness(1.08)} }
+.gros:active{transform:scale(.98)}
+.gros:disabled{background:var(--surface-container-highest);color:var(--on-surface-variant)}
 
 /* ------------------------------------------------------------------ repos */
 
-/* L'écran se vide du haut vers le bas au fil du repos. Le décompte est écrit
-   deux fois, l'une claire sur le fond, l'autre découpée à la hauteur du
-   niveau : chaque chiffre reste lisible où que passe la frontière. */
-.repos{padding:0}
-.niveau{position:absolute;left:0;right:0;bottom:0;height:100%;background:var(--primary);overflow:hidden;transition:height .25s linear}
-.calque{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
-.calque b{font-size:min(34vw,20svh,9.5rem);font-weight:900;font-variation-settings:"wdth" 30;font-variant-numeric:tabular-nums;line-height:1}
-.calque.clair b{color:var(--on-surface)}
-.calque.fonce b{color:var(--on-primary)}
-/* Dans le niveau, le calque foncé garde la hauteur de TOUT l'écran, collé en
-   bas : ses chiffres restent donc exactement sous les chiffres clairs. */
-.niveau .calque{top:auto;bottom:0;height:var(--plein,100svh)}
-.repos-haut,.repos-bas{position:relative;z-index:2}
-.repos-haut{padding:18px 18px 0;text-align:center}
-.etiquette{display:inline-block;background:var(--surface-container-highest);color:var(--on-surface);border-radius:999px;padding:8px 18px;font-weight:700}
-.repos-bas{margin-top:auto;padding:0 18px 18px}
-.ensuite{background:var(--surface-container-highest);border-radius:24px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.ensuite span{font-size:.9rem;color:var(--on-surface-variant);font-weight:600}
+.repos-bas{width:100%;margin-top:auto;padding-top:var(--e5)}
+.ensuite{background:var(--surface-container);border-radius:24px;padding:var(--e3) var(--e4);display:flex;justify-content:space-between;align-items:center;gap:var(--e3)}
+.ensuite span{font-size:.875rem;color:var(--on-surface-variant);font-weight:600}
 .ensuite b{font-size:1.05rem;text-align:right}
-.actions{display:flex;gap:10px;margin-top:10px}
-.actions button{flex:1;min-height:60px;border:0;border-radius:30px;font-size:1.1rem;font-weight:700;background:var(--surface-container-highest);color:var(--on-surface)}
-.actions .passer{background:var(--secondary-container);color:var(--on-secondary-container)}
+.actions{display:flex;gap:var(--e3);margin-top:var(--e3)}
+.actions button{flex:1;min-height:60px;border:0;border-radius:30px;font-size:1.1rem;font-weight:700;background:var(--surface-container-highest);color:var(--on-surface);transition:background-color .15s var(--sortie)}
+.actions .passer{background:var(--inverse-surface);color:var(--inverse-on-surface)}
 .annuler{
-  display:block;margin:10px auto 0;min-height:44px;padding:0 18px;border:0;border-radius:22px;
-  background:var(--surface-container-highest);color:var(--on-surface);font-size:.95rem;font-weight:600;
+  display:block;margin:var(--e3) auto 0;min-height:44px;padding:0 var(--e4);border:0;border-radius:22px;
+  background:transparent;color:var(--on-surface-variant);font-size:1rem;font-weight:600;
+  text-decoration:underline;text-underline-offset:3px;
 }
 
 /* --------------------------------------------------------------- réglages */
 
+/* La feuille : un corps qui défile et un pied FIXE hors de ce défilement.
+   Un pied `sticky` dans la zone qui défile recouvrait « Vider les séries ». */
 .feuille{
-  border:0;padding:0;margin:auto auto 0;width:100%;max-width:520px;max-height:88svh;
+  border:0;padding:0;margin:auto auto 0;width:100%;max-width:520px;max-height:92svh;
   border-radius:28px 28px 0 0;background:var(--surface-container-low);color:var(--on-surface);
-  overflow:auto;padding-bottom:env(safe-area-inset-bottom);
+  overflow:hidden;padding-bottom:env(safe-area-inset-bottom);
 }
+.feuille[open]{display:flex;flex-direction:column}
+.feuille-corps{flex:1;min-height:0;overflow:auto}
 .feuille::backdrop{background:var(--scrim)}
-.feuille-tete{display:flex;align-items:center;padding:18px 20px 0}
-.feuille-pied{position:sticky;bottom:0;padding:8px 20px 16px;background:var(--surface-container-low)}
-.feuille-pied .gros{min-height:60px;font-size:1.15rem}
+.feuille-tete{display:flex;align-items:center;padding:var(--e5) var(--e5) 0}
 .feuille-tete h2{margin:0;font-size:1.3rem}
-.bloc{padding:10px 20px 16px}
+.feuille-pied{flex:none;padding:var(--e3) var(--e5) var(--e4);border-top:1px solid var(--outline-variant)}
+.feuille-pied .gros{min-height:60px;font-size:1.15rem}
+.bloc{padding:var(--e3) var(--e5) var(--e4)}
 .bloc + .bloc{border-top:1px solid var(--outline-variant)}
-.bloc h3{margin:6px 0 10px;font-size:1rem;font-weight:700;color:var(--on-surface-variant)}
+.bloc h3{margin:var(--e2) 0 var(--e3);font-size:1rem;font-weight:700;color:var(--on-surface-variant)}
 
-.rm-ligne{display:flex;gap:10px;align-items:stretch}
+.rm-ligne{display:flex;gap:var(--e3);align-items:stretch}
 .pas{flex:none;width:64px;min-height:60px;border:0;border-radius:18px;background:var(--surface-container-highest);font-size:1.15rem;font-weight:800}
-.rm-champ{flex:1;display:flex;align-items:center;gap:6px;background:var(--surface);border:2px solid var(--outline);border-radius:18px;padding:0 14px}
+.rm-champ{flex:1;display:flex;align-items:center;gap:var(--e2);background:var(--surface);border:2px solid var(--outline);border-radius:18px;padding:0 var(--e4)}
 .rm-champ:focus-within{border-color:var(--primary)}
 .rm-champ input{
   flex:1;min-width:0;min-height:56px;border:0;background:transparent;color:var(--on-surface);outline:none;
@@ -193,34 +225,53 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--primary);outlin
 }
 .rm-champ input::-webkit-outer-spin-button,.rm-champ input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .rm-champ span{font-weight:700;color:var(--on-surface-variant)}
-.rm-apercu{margin-top:12px;background:var(--surface-container);border-radius:20px;padding:12px 14px}
-.rm-apercu .ligne{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-.rm-apercu .ligne span{font-size:.9rem;font-weight:600;color:var(--on-surface-variant)}
+.rm-apercu{margin-top:var(--e3);background:var(--surface-container);border-radius:20px;padding:var(--e3) var(--e4);text-align:center}
+.rm-apercu .ligne{display:flex;justify-content:space-between;align-items:baseline;gap:var(--e3)}
+.rm-apercu .ligne span{font-size:.875rem;font-weight:600;color:var(--on-surface-variant)}
 .rm-apercu .ligne b{font-size:2rem;font-weight:900;font-variation-settings:"wdth" 60;color:var(--primary)}
-.rm-apercu svg{display:block;width:100%;height:60px;margin-top:6px}
-.rm-apercu p{margin:4px 0 0;font-size:.85rem;color:var(--on-surface-variant)}
+.rm-apercu svg{display:block;width:100%;height:60px;margin-top:var(--e2)}
+.rm-apercu p{margin:var(--e1) 0 0;font-size:.875rem;color:var(--on-surface-variant)}
 
-.options{display:flex;gap:8px}
-.option{flex:1;min-height:52px;border:0;border-radius:16px;background:var(--surface-container-high);font-weight:700;
-  transition:border-radius .35s var(--ressort),background-color .2s}
-.option[aria-pressed="true"]{background:var(--primary);color:var(--on-primary);border-radius:26px}
+.options{display:flex;gap:var(--e2)}
+.option{flex:1;min-height:52px;border:0;border-radius:16px;background:var(--surface-container-high);font-weight:700;transition:background-color .15s var(--sortie)}
+.option[aria-pressed="true"]{background:var(--inverse-surface);color:var(--inverse-on-surface)}
 .option[aria-pressed="true"]::before{content:"\2713\00a0"}
 
-.large{display:block;width:100%;min-height:52px;border:0;border-radius:26px;font-weight:700;font-size:1rem}
-.large + .large{margin-top:10px}
+.large{display:block;width:100%;min-height:52px;border:0;border-radius:26px;font-weight:700;font-size:1rem;transition:background-color .15s var(--sortie)}
+.large + .large{margin-top:var(--e3)}
 .ton{background:var(--surface-container-highest)}
 .ton.arme{background:var(--error-container);color:var(--on-error-container)}
-.note{margin:10px 0 0;font-size:.85rem;color:var(--on-surface-variant);text-align:center}
+.note{margin:var(--e3) 0 0;font-size:.875rem;color:var(--on-surface-variant);text-align:center}
+
+@media (hover:hover){
+  .pas:hover,.option:not([aria-pressed="true"]):hover,.ton:not(.arme):hover,.actions button:hover{filter:brightness(.96)}
+}
 
 /* ------------------------------------------------------ barre de mise à jour */
 
 .topbar{
   position:fixed;left:0;right:0;top:0;z-index:100;
-  display:flex;align-items:center;justify-content:center;gap:14px;
-  padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--primary);color:var(--on-primary);
+  display:flex;align-items:center;justify-content:center;gap:var(--e4);
+  padding:calc(var(--e3) + env(safe-area-inset-top)) var(--e4) var(--e3);background:var(--inverse-surface);color:var(--inverse-on-surface);
   font-size:.9rem;font-weight:700;
 }
-.topbar button{min-height:44px;padding:0 16px;border:0;border-radius:22px;background:var(--on-primary);color:var(--primary);font-weight:700}
+.topbar button{min-height:44px;padding:0 var(--e4);border:0;border-radius:22px;background:var(--primary);color:var(--on-primary);font-weight:700}
+
+/* Écrans bas (360 × 640 et moins) : tout se resserre pour que le bouton
+   principal reste entier. Mesuré : sans ce bloc, il dépassait de 41 px. */
+@media (max-height:700px){
+  .tete{padding-top:var(--e2)}
+  .exos{padding-top:var(--e2)}
+  .exo{min-height:48px}
+  .nom{margin-top:var(--e2);font-size:1.15rem}
+  .disque{--d:min(62vw,27svh,300px);margin-top:var(--e2)}
+  .pastilles{margin-top:0}
+  .presc{font-size:1rem;margin-top:0}
+  .charge{margin-top:var(--e2);padding:var(--e1) var(--e5) var(--e2)}
+  .charge svg{height:28px}
+  .charge b{font-size:1.35rem}
+  .gros{min-height:64px;font-size:1.25rem}
+}
 
 @media (prefers-reduced-motion:reduce){
   *{transition-duration:.01ms !important;animation-duration:.01ms !important}

@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GVT Tracker</title>
 <meta name="description" content="Suivi de séances German Volume Training : une série à la fois, repos chronométré, charge et disques calculés. Fonctionne hors ligne.">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f9f9ff">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10131a">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#fcf8fa">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131315">
 <meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -36,10 +36,19 @@
 
   <nav class="exos" id="exos" aria-label="Exercices de la séance"></nav>
 
-  <!-- SÉRIE : une seule chose à regarder, lisible téléphone posé au sol -->
+  <!-- SÉRIE : la série se lit sur un disque, de la couleur du plus lourd sur la barre -->
   <main class="ecran serie" id="ecran-serie">
     <h1 class="nom" id="nom"></h1>
-    <p class="compteur" id="compteur" aria-live="off"><b id="num"></b><span id="sur"></span></p>
+    <div class="disque" id="disque-serie">
+      <!-- width/height 0 en attributs : sans le CSS (ancien cache), le SVG ne
+           s'affiche pas en grand disque noir. -->
+      <svg class="disque-svg" viewBox="0 0 200 200" width="0" height="0" aria-hidden="true" focusable="false"></svg>
+      <p class="insert" id="compteur"><b id="num"></b><small id="sur"></small></p>
+    </div>
+    <div class="pastilles" id="pastilles" role="group" aria-label="Type de disques de la salle">
+      <button type="button" class="pastille" data-disques="couleur" aria-pressed="true" aria-label="Disques de couleur"><i></i></button>
+      <button type="button" class="pastille" data-disques="fonte" aria-pressed="false" aria-label="Disques en fonte"><i></i></button>
+    </div>
     <p class="presc" id="presc"></p>
     <div id="bloc-charge"></div>
     <div id="bloc-fin"></div>
@@ -47,14 +56,14 @@
     <button class="gros" type="button" id="action" data-action-principale></button>
   </main>
 
-  <!-- REPOS : tout l'écran se vide au fil du temps -->
+  <!-- REPOS : le même disque se vide au fil du temps -->
   <section class="ecran repos" id="ecran-repos" aria-label="Repos">
-    <div class="calque clair" aria-hidden="true"><b id="temps-1">00:00</b></div>
-    <!-- Le décompte foncé vit DANS le niveau, qui le coupe à sa hauteur : sa
-         couleur a ainsi son vrai fond comme ancêtre, et se mesure juste. -->
-    <div class="niveau" id="niveau"><div class="calque fonce" aria-hidden="true"><b id="temps-2">00:00</b></div></div>
+    <h1 class="nom">Repos</h1>
+    <div class="disque" id="disque-repos">
+      <svg class="disque-svg" viewBox="0 0 200 200" width="0" height="0" aria-hidden="true" focusable="false"></svg>
+      <p class="insert" aria-hidden="true"><b class="temps" id="temps-1">00:00</b><small>repos</small></p>
+    </div>
     <p class="sr-only" id="temps-lu"></p>
-    <div class="repos-haut"><span class="etiquette">Repos</span></div>
     <div class="repos-bas">
       <div class="ensuite"><span>Ensuite</span><b id="ensuite"></b></div>
       <div class="actions">
@@ -67,6 +76,7 @@
 </div>
 
 <dialog class="feuille" id="reglages" aria-labelledby="reglages-titre">
+  <div class="feuille-corps">
   <div class="feuille-tete">
     <h2 id="reglages-titre">Réglages</h2>
   </div>
@@ -95,6 +105,7 @@
     <p class="note" id="install-ios" hidden>Pour l'installer : <strong>Partager</strong>, puis « Sur l'écran d'accueil ».</p>
     <p class="note" id="version"></p>
   </section>
+  </div>
 
   <!-- Fermer EN BAS, sous le pouce : un bouton en haut d'une feuille qui
        monte du bas oblige à changer de prise. -->
