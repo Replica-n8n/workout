@@ -207,7 +207,7 @@ body {
 }
 
 .titre {
-  font-size: .7rem;
+  font-size: .875rem;
   letter-spacing: .07em;
   text-transform: uppercase;
   color: var(--gris);
@@ -248,6 +248,10 @@ body {
 }
 .bascule button[aria-pressed="true"] { background: var(--vert); color: #0d0f12; }
 
+/* Le focus clavier se voit : sans règle, les boutons ronds et la bascule
+   n'avaient que le liseré par défaut du navigateur, invisible sur ce fond. */
+:focus-visible { outline: 2px solid var(--vert); outline-offset: 2px; }
+
 /* La distance se tape : un seul champ, le clavier numérique, l'unité à côté.
    ⚠️ Exactement la hauteur d'une durée (46 px) : passer de l'un à l'autre
    faisait grandir puis rétrécir le panneau, champ de 56 px plus une ligne
@@ -279,7 +283,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .champ .unite { font-size: .95rem; color: var(--gris); }
-.champ .equiv { margin-left: auto; font-size: .82rem; color: var(--gris); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.champ .equiv { margin-left: auto; font-size: .875rem; color: var(--gris); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .champ.faux { border-color: var(--rouge); }
 .champ.faux .equiv { color: var(--rouge); }
 .chip {
@@ -374,7 +378,7 @@ body {
   border-color: var(--vert);
   color: #0d0f12;
 }
-.sous { display: block; font-size: .78rem; color: var(--gris); font-weight: 400; }
+.sous { display: block; font-size: .875rem; color: var(--gris); font-weight: 400; }
 .sous.vieux { color: var(--jaune); }
 .sous.faux { color: var(--rouge); }
 
@@ -435,9 +439,11 @@ button.secondaire {
   font-size: 1.3rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  min-width: 78px;
+  /* 86 px : la marque « À retenir », passée à 14 px, élargissait sa carte de
+     3 px et décalait la colonne des rues d'une carte à l'autre. */
+  min-width: 86px;
 }
-.boucle .detail { flex: 1; font-size: .82rem; color: var(--gris); line-height: 1.35; }
+.boucle .detail { flex: 1; font-size: .875rem; color: var(--gris); line-height: 1.35; }
 .boucle .detail b { color: var(--texte); font-weight: 600; }
 .boucle .puce {
   width: 12px; height: 12px; border-radius: 50%;
@@ -448,7 +454,7 @@ button.secondaire {
 .rangee { display: flex; gap: 8px; margin-top: 8px; }
 .rangee > * { flex: 1; }
 
-.pied { font-size: .76rem; color: var(--gris); text-align: center; margin: 0; }
+.pied { font-size: .875rem; color: var(--gris); text-align: center; margin: 0; }
 /* La meteo se lit au meme rang que le reste des reglages, alignee a gauche
    comme les lignes qu'elle complete, et non centree comme une note de bas
    de page. */
@@ -530,9 +536,9 @@ button.secondaire {
 }
 .favori .km {
   font-size: 1.3rem; font-weight: 700;
-  font-variant-numeric: tabular-nums; min-width: 78px;
+  font-variant-numeric: tabular-nums; min-width: 86px;
 }
-.favori .detail { font-size: .82rem; color: var(--gris); line-height: 1.35; }
+.favori .detail { font-size: .875rem; color: var(--gris); line-height: 1.35; }
 .favori .detail b { color: var(--texte); font-weight: 600; }
 .favori .jeter {
   width: 44px; height: 44px; flex: 0 0 44px;
@@ -584,7 +590,7 @@ button.secondaire {
    où elle sert, sans rien bloquer, et une seule fois. */
 .note {
   margin: 0;
-  font-size: .82rem;
+  font-size: .875rem;
   color: var(--texte);
   background: #1a2333;
   border-left: 3px solid #5b6bb0;
@@ -614,7 +620,7 @@ button.secondaire {
 .boucle .marque {
   display: block;
   margin-top: 2px;
-  font-size: .62rem;
+  font-size: .875rem;
   font-weight: 700;
   letter-spacing: .08em;
   text-transform: uppercase;
@@ -649,9 +655,9 @@ button.secondaire {
 .barre { height: 10px; background: var(--case); border-radius: 5px; overflow: hidden; }
 .barre[hidden] { display: none; }
 .barre i { display: block; height: 100%; background: #5b6bb0; border-radius: 5px; }
-.detail-jauge { margin: 0; font-size: .82rem; color: var(--gris); }
+.detail-jauge { margin: 0; font-size: .875rem; color: var(--gris); }
 
-.legende-carte { display: flex; gap: 16px; font-size: .78rem; color: var(--gris); }
+.legende-carte { display: flex; gap: 16px; font-size: .875rem; color: var(--gris); }
 .legende-carte span { display: flex; align-items: center; gap: 6px; }
 .pastille { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
 .pastille.faite { background: #5b6bb0; }
@@ -659,7 +665,7 @@ button.secondaire {
 
 /* La version, discrète mais lisible : sans elle, impossible de savoir
    téléphone en main si la mise à jour est bien arrivée. */
-#version { opacity: .55; font-size: .7rem; margin-top: -4px; }
+#version { opacity: .55; font-size: .875rem; margin-top: -4px; }
 
 /* Reprendre une course interrompue : proposé sur l'écran d'accueil, jamais
    imposé à sa place. */

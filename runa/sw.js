@@ -19,8 +19,14 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.14.2';
-const SHELL = 'runa-shell-' + VERSION;
+const VERSION = '1.15.0';
+/* Toutes nos apps partagent l'origine replica-n8n.github.io, donc le même
+   CacheStorage. Le nom porte l'app et sa portée, et l'activation ne supprime
+   QUE ces caches-là : avant, Runa effaçait ceux de GVT, de La Cour et des
+   jeux, qui perdaient leur hors ligne jusqu'à leur prochaine visite. */
+const PREFIXE = 'runa:' + new URL(self.registration.scope).pathname + ':';
+const SHELL = PREFIXE + VERSION;
+const ANCIEN = 'runa-shell-';
 
 const FILES = [
   './',
@@ -94,7 +100,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil((async () => {
     const ks = await caches.keys();
-    const perimes = ks.filter(k => k !== SHELL);
+    const perimes = ks.filter(k => (k.startsWith(PREFIXE) && k !== SHELL) || k.startsWith(ANCIEN));
     await Promise.all(perimes.map(k => caches.delete(k)));
     await self.clients.claim();
 

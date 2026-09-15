@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et le module.
    ========================================================================= */
 
-const VERSION = '2.1.0';
+const VERSION = '2.1.1';
 
 /* ⚠️ LE NOM DU CACHE PORTE L'APP ET SA PORTÉE. Toutes les apps du compte
    partagent la même origine (replica-n8n.github.io), donc le même

@@ -6,9 +6,14 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.8.0';
-const SHELL = 'lacour-shell-' + VERSION;
-const ASSETS = 'lacour-assets-' + VERSION;
+const VERSION = '1.9.0';
+/* Toutes nos apps partagent l'origine replica-n8n.github.io, donc le même
+   CacheStorage. Le nom porte l'app et sa portée, et l'activation ne supprime
+   QUE ces caches-là : avant, La Cour effaçait ceux de GVT, de Runa et des
+   jeux, qui ne marchaient plus hors ligne jusqu'à leur prochaine visite. */
+const PREFIXE = 'lacour:' + new URL(self.registration.scope).pathname + ':';
+const SHELL = PREFIXE + VERSION;
+const ANCIENS = ['lacour-shell-', 'lacour-assets-'];
 
 const FILES = [
   './',
@@ -19,6 +24,9 @@ const FILES = [
   './js/store.js',
   './js/media.js',
   './js/figures.js',
+  './polices/saira-condensed-600.woff2',
+  './polices/saira-condensed-700.woff2',
+  './polices/saira-condensed-800.woff2',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -43,7 +51,8 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== SHELL && k !== ASSETS).map(k => caches.delete(k))
+        keys.filter(k => (k.startsWith(PREFIXE) && k !== SHELL) || ANCIENS.some(a => k.startsWith(a)))
+          .map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   );
@@ -58,29 +67,19 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);
-
-  /* Les polices Google : on les garde dès qu'on les a vues une fois,
-     pour que l'app reste identique hors ligne. */
-  if (url.origin !== location.origin) {
-    e.respondWith(
-      caches.match(req).then(hit =>
-        hit || fetch(req).then(res => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(ASSETS).then(c => c.put(req, copy)).catch(() => {});
-          }
-          return res;
-        }).catch(() => hit)
-      )
-    );
-    return;
-  }
+  /* Plus rien ne vient d'une autre origine depuis que la police est hébergée. */
+  if (url.origin !== location.origin) return;
 
   /* Navigation : le réseau d'abord si disponible, sinon la coquille.
-     Un parc n'a pas de réseau, la coquille doit toujours répondre. */
+     Un parc n'a pas de réseau, la coquille doit toujours répondre.
+     `no-cache` revalide le HTML : Pages le garde 10 minutes en cache HTTP, et
+     un ancien index.html pouvait sinon partir avec le nouveau JavaScript. */
   if (req.mode === 'navigate') {
+    const coquille = () => caches.open(SHELL).then(c => c.match('./index.html'));
     e.respondWith(
-      fetch(req).catch(() => caches.match('./index.html'))
+      fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
+        .then(res => res.ok ? res : coquille().then(hit => hit || res))
+        .catch(coquille)
     );
     return;
   }
@@ -88,14 +87,13 @@ self.addEventListener('fetch', e => {
   /* `res.ok` est indispensable : sans lui, un 404 finissait en cache et
      était resservi indéfiniment. Concrètement, une image ajoutée dans
      images/ APRÈS un premier chargement restait invisible, le worker
-     répondant par l'échec qu'il avait mémorisé avant qu'elle existe. */
+     répondant par l'échec qu'il avait mémorisé avant qu'elle existe.
+     La recherche se fait dans NOTRE cache seulement : un `caches.match`
+     sans nom pouvait rendre un fichier du même chemin rangé par une autre app. */
   e.respondWith(
-    caches.match(req).then(hit => hit || fetch(req).then(res => {
-      if (res.ok) {
-        const copy = res.clone();
-        caches.open(SHELL).then(c => c.put(req, copy)).catch(() => {});
-      }
+    caches.open(SHELL).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok) c.put(req, res.clone()).catch(() => {});
       return res;
-    }))
+    })))
   );
 });
