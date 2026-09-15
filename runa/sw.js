@@ -19,7 +19,7 @@
    mémoire, la carte et le générateur tournent en avion.
    ========================================================================= */
 
-const VERSION = '1.15.0';
+const VERSION = '1.15.1';
 /* Toutes nos apps partagent l'origine replica-n8n.github.io, donc le même
    CacheStorage. Le nom porte l'app et sa portée, et l'activation ne supprime
    QUE ces caches-là : avant, Runa effaçait ceux de GVT, de La Cour et des
