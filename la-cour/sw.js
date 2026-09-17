@@ -6,7 +6,7 @@
    ?v=... à répercuter dans le HTML, le CSS et les modules.
    ========================================================================= */
 
-const VERSION = '1.9.0';
+const VERSION = '1.9.1';
 /* Toutes nos apps partagent l'origine replica-n8n.github.io, donc le même
    CacheStorage. Le nom porte l'app et sa portée, et l'activation ne supprime
    QUE ces caches-là : avant, La Cour effaçait ceux de GVT, de Runa et des

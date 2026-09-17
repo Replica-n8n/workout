@@ -665,7 +665,8 @@ button.secondaire {
 
 /* La version, discrète mais lisible : sans elle, impossible de savoir
    téléphone en main si la mise à jour est bien arrivée. */
-#version { opacity: .55; font-size: .875rem; margin-top: -4px; }
+/* .8 et pas .55 : à .55 le contraste tombait à 2,9:1 (Lighthouse), .8 donne 4,8:1. */
+#version { opacity: .8; font-size: .875rem; margin-top: -4px; }
 
 /* Reprendre une course interrompue : proposé sur l'écran d'accueil, jamais
    imposé à sa place. */
