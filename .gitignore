@@ -16,3 +16,5 @@ runa/graphify-out/
 
 # La fiche produit de la skill impeccable : locale, pas une page du site.
 runa/PRODUCT.md
+# Claude Code y garde les commandes autorisées, parfois avec un mot de passe : ne jamais le publier
+.claude/settings.local.json
